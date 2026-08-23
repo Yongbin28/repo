@@ -1,0 +1,4 @@
+1. check if known failure
+2. retest to verify issue (golden wafer/correlation unit/swap hardware)
+3. identify shifted test (maybe one or more)
+4. create summary report (statistic)

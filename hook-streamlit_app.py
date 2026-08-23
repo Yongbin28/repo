@@ -1,0 +1,18 @@
+hiddenimports = [
+    "ADYAP_DataPulling",
+    "MDM_WaferId",
+    "MDM_CFC_DLog_Extraction",
+    "ml_compute_statistic",
+    "ml_train_model",
+    "wafer_data_combiner",
+    "Extract_Model_Accuracy",
+    "ml_yield_prediction",
+    "save_cookies",
+    "utils",
+    "xgboost",
+    "catboost",
+    "sklearn",
+    "plotly",
+    "playwright",
+    "playwright.async_api",
+]

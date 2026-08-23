@@ -201,6 +201,59 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
+# WaferPulse local environments and tooling
+fyp_env/
+node_modules/
+ms-playwright/
+.playwright-cli/
+.frontend-slides/
+pytest-cache-files-*/
+
+# WaferPulse runtime and generated output
+pipeline/
+output/
+outputs/
+tmp/
+scratch/
+catboost_info/
+pipeline_execution_*.log
+pipeline_status.json
+Pipeline_Status_Summary.xlsx
+temp_log.txt
+diff_output*.txt
+
+# Raw/processed manufacturing data and model artifacts
+data/
+dataset/
+limit/
+ETS364B/
+*.csv
+*.xlsx
+*.stdf
+*.std
+*.std_1
+*.joblib
+*.pkl
+*.keras
+
+# Reports, presentations, media, and archives
+FYP/
+HydroSight_SourceCode_Toh Yi Jing_TP065288/
+HydroSight_SourceCode_Toh Yi Jing_TP065288.zip
+*.pdf
+*.mp4
+*.zip
+*.docx
+*.pptx
+*.jpeg
+*.jpg
+~$*
+
+# Required application assets/configuration
+!TesterFamilyMap.xlsx
+!icon.jpg
+!desktop_app.spec
+
 # Marimo
 marimo/_static/
 marimo/_lsp/
