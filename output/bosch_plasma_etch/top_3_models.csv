@@ -1,0 +1,4 @@
+Rank,Category,Model,R2,RMSE,MAE,Wafers,Lots
+1,Regularised Linear,Lasso,0.8837,0.1363,0.1091,88,10
+2,Regularised Linear,Elastic Net,0.8834,0.1364,0.1096,88,10
+3,Boosting Ensemble,Lightgbm,0.8324,0.1636,0.1291,88,10

@@ -1,0 +1,21 @@
+Rank,Category,Model,Task,Target,Feature_Set,R2,RMSE,MAE,Rows,Lots
+1,Regularised Linear,Lasso,wafer_mean,si_etch,process_only,0.8837,0.1363,0.1091,88,10
+2,Regularised Linear,Elastic Net,wafer_mean,si_etch,process_only,0.8834,0.1364,0.1096,88,10
+3,Boosting Ensemble,Lightgbm,wafer_mean,si_etch,process_only,0.8324,0.1636,0.1291,88,10
+4,Boosting Ensemble,Xgboost,wafer_mean,si_etch,process_only,0.8323,0.1636,0.1351,88,10
+5,Bagging Ensemble,Extra Trees,wafer_mean,si_etch,process_only,0.7958,0.1806,0.1471,88,10
+6,Boosting Ensemble,Hist Gradient Boosting,wafer_mean,si_etch,process_only,0.7703,0.1915,0.1626,88,10
+7,Bagging Ensemble,Random Forest,wafer_mean,si_etch,process_only,0.7467,0.2011,0.1702,88,10
+8,Instance-Based,Knn,wafer_mean,si_etch,process_only,0.6221,0.2457,0.2037,88,10
+9,Baseline,Dummy Mean,wafer_mean,si_etch,process_only,-0.0326,0.4061,0.3498,88,10
+10,Regularised Linear,Ridge,wafer_mean,si_etch,process_only,-3.2184,0.8208,0.1962,88,10
+1,Boosting Ensemble,Lightgbm,map_point,si_etch,process_plus_coordinate,0.9925,0.3135,0.1677,7832,10
+2,Boosting Ensemble,Xgboost,map_point,si_etch,process_plus_coordinate,0.9921,0.321,0.1739,7832,10
+3,Boosting Ensemble,Hist Gradient Boosting,map_point,si_etch,process_plus_coordinate,0.9921,0.3218,0.1766,7832,10
+4,Bagging Ensemble,Extra Trees,map_point,si_etch,process_plus_coordinate,0.9914,0.3351,0.1844,7832,10
+5,Bagging Ensemble,Random Forest,map_point,si_etch,process_plus_coordinate,0.991,0.3421,0.1948,7832,10
+6,Regularised Linear,Lasso,map_point,si_etch,process_plus_coordinate,0.9044,1.1159,0.9334,7832,10
+7,Regularised Linear,Elastic Net,map_point,si_etch,process_plus_coordinate,0.8949,1.1705,1.0176,7832,10
+8,Instance-Based,Knn,map_point,si_etch,process_plus_coordinate,0.8384,1.451,0.9106,7832,10
+9,Regularised Linear,Ridge,map_point,si_etch,process_plus_coordinate,0.5805,2.3379,1.1712,7832,10
+10,Baseline,Dummy Mean,map_point,si_etch,process_plus_coordinate,-0.0004,3.6104,2.9787,7832,10

@@ -1,0 +1,39 @@
+task,target,feature_set,model,rows,groups,r2,rmse,mae,category
+map_point,oxide_etch,coordinate_only,extra_trees,7832,10,0.059012009677239075,0.07499181666119883,0.051560472085121774,Bagging Ensemble
+map_point,oxide_etch,process_only,extra_trees,7832,10,0.00526969437827951,0.07710357388458154,0.059614221456819425,Bagging Ensemble
+map_point,oxide_etch,process_plus_coordinate,extra_trees,7832,10,0.0018778805642452046,0.07723491522022354,0.05708877687555702,Bagging Ensemble
+map_point,oxide_etch,process_only,ridge,7832,10,-0.018949534624082665,0.07803656990694241,0.06161416033970223,Regularised Linear
+map_point,oxide_etch,coordinate_only,ridge,7832,10,-0.04626465837118143,0.07907562112400479,0.05792354298041798,Regularised Linear
+map_point,oxide_etch,process_plus_coordinate,ridge,7832,10,-0.05049515807542693,0.07923532828287706,0.06322737795236327,Regularised Linear
+map_point,oxide_etch,coordinate_only,dummy_mean,7832,10,-0.05351699029592072,0.07934920978168188,0.06130529082337945,Baseline
+map_point,oxide_etch,process_only,dummy_mean,7832,10,-0.05351699029592072,0.07934920978168188,0.06130529082337945,Baseline
+map_point,oxide_etch,process_plus_coordinate,dummy_mean,7832,10,-0.05351699029592072,0.07934920978168188,0.06130529082337945,Baseline
+map_point,si_etch,process_plus_coordinate,lightgbm,7832,10,0.9924577011546956,0.31348985247021766,0.16771141058050357,Boosting Ensemble
+map_point,si_etch,process_plus_coordinate,xgboost,7832,10,0.9920939740671423,0.32095987086827343,0.17388821989069278,Boosting Ensemble
+map_point,si_etch,process_plus_coordinate,hist_gradient_boosting,7832,10,0.9920507716961628,0.32183561654355436,0.1765516991045911,Boosting Ensemble
+map_point,si_etch,process_plus_coordinate,extra_trees,7832,10,0.9913834509468943,0.3350721263740687,0.18437350220022686,Bagging Ensemble
+map_point,si_etch,process_plus_coordinate,random_forest,7832,10,0.9910171041368855,0.3421210544089624,0.19483122502683162,Bagging Ensemble
+map_point,si_etch,coordinate_only,extra_trees,7832,10,0.9818921174435982,0.48574177320782946,0.36088764516116595,Bagging Ensemble
+map_point,si_etch,process_plus_coordinate,lasso,7832,10,0.9044279326701293,1.1159304020539913,0.9333572840267329,Regularised Linear
+map_point,si_etch,process_plus_coordinate,elastic_net,7832,10,0.894853478288587,1.1704936841789466,1.0176043460182558,Regularised Linear
+map_point,si_etch,coordinate_only,ridge,7832,10,0.8934729918751264,1.1781524323783432,0.9805081688566235,Regularised Linear
+map_point,si_etch,process_plus_coordinate,knn,7832,10,0.8384226113944081,1.4509816220428398,0.9106255123541714,Instance-Based
+map_point,si_etch,process_plus_coordinate,ridge,7832,10,0.5805259661160509,2.337890469631078,1.1712147712800647,Regularised Linear
+map_point,si_etch,process_only,extra_trees,7832,10,0.009816361887350467,3.59194346235671,2.969348308530383,Bagging Ensemble
+map_point,si_etch,coordinate_only,dummy_mean,7832,10,-0.00039903034442012597,3.6104243568859884,2.978745425282736,Baseline
+map_point,si_etch,process_only,dummy_mean,7832,10,-0.00039903034442012597,3.6104243568859884,2.978745425282736,Baseline
+map_point,si_etch,process_plus_coordinate,dummy_mean,7832,10,-0.00039903034442012597,3.6104243568859884,2.978745425282736,Baseline
+map_point,si_etch,process_only,ridge,7832,10,-0.30460013275632725,4.1229714598227245,3.1517208669168295,Regularised Linear
+wafer_mean,oxide_etch,process_only,ridge,88,10,0.4318597584142744,0.03270628214311949,0.02511777081936829,Regularised Linear
+wafer_mean,oxide_etch,process_only,extra_trees,88,10,0.05032494181718683,0.042285446341510886,0.03337700870723784,Bagging Ensemble
+wafer_mean,oxide_etch,process_only,dummy_mean,88,10,-0.16987463769334443,0.04693243269279635,0.03956008478033084,Baseline
+wafer_mean,si_etch,process_only,lasso,88,10,0.8837373463060553,0.13625921066275537,0.10912335641009996,Regularised Linear
+wafer_mean,si_etch,process_only,elastic_net,88,10,0.8834401263177255,0.136433269611732,0.1096127434612005,Regularised Linear
+wafer_mean,si_etch,process_only,lightgbm,88,10,0.8323502544096504,0.1636240742392344,0.12907721603390374,Boosting Ensemble
+wafer_mean,si_etch,process_only,xgboost,88,10,0.8323269763578304,0.16363543339000697,0.135127981808769,Boosting Ensemble
+wafer_mean,si_etch,process_only,extra_trees,88,10,0.7958135674948011,0.18057565285594945,0.14711552651384965,Bagging Ensemble
+wafer_mean,si_etch,process_only,hist_gradient_boosting,88,10,0.7702979041498136,0.19152621757838575,0.1625875718025192,Boosting Ensemble
+wafer_mean,si_etch,process_only,random_forest,88,10,0.7466661898282477,0.20113716778940263,0.17019937220032808,Bagging Ensemble
+wafer_mean,si_etch,process_only,knn,88,10,0.6220918391473734,0.24566251195422664,0.20366164401683637,Instance-Based
+wafer_mean,si_etch,process_only,dummy_mean,88,10,-0.03255799526265246,0.4060719396627782,0.34981612738862355,Baseline
+wafer_mean,si_etch,process_only,ridge,88,10,-3.2184227161282264,0.8207687288385354,0.19619858495736112,Regularised Linear

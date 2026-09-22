@@ -1,0 +1,95 @@
+{
+  "dataset": "PHM Society 2016 CMP Data Challenge",
+  "official_specification": "https://phmsociety.org/wp-content/uploads/2016/05/PHM16DataChallengeCFP.pdf",
+  "transport_mirror_doi": "10.5281/zenodo.19803296",
+  "label_sha256": "5b22c120de02adb950b9162a4a40d2cb14ad4458751b3f9747da708ad1c78178",
+  "trace_files": 185,
+  "trace_rows": 672744,
+  "wafer_stage_samples": 1977,
+  "physical_wafers": 1695,
+  "campaigns": 19,
+  "features": 348,
+  "feature_exclusions": [
+    "WAFER_ID",
+    "source-file identity",
+    "absolute TIMESTAMP"
+  ],
+  "campaign_definition": "floor(physical wafer earliest chronological source-file index / 10)",
+  "mrr_quality_ceiling": 300.0,
+  "mrr_outliers_removed": 4,
+  "mrr_outlier_rows": [
+    {
+      "WAFER_ID": 1834206730,
+      "STAGE": "A",
+      "AVG_REMOVAL_RATE": 4202.11245,
+      "earliest_source": 88,
+      "campaign": 8
+    },
+    {
+      "WAFER_ID": 1834206944,
+      "STAGE": "A",
+      "AVG_REMOVAL_RATE": 4182.41655,
+      "earliest_source": 88,
+      "campaign": 8
+    },
+    {
+      "WAFER_ID": 1834206972,
+      "STAGE": "A",
+      "AVG_REMOVAL_RATE": 4129.494,
+      "earliest_source": 88,
+      "campaign": 8
+    },
+    {
+      "WAFER_ID": 2058207580,
+      "STAGE": "A",
+      "AVG_REMOVAL_RATE": 4326.15405,
+      "earliest_source": 152,
+      "campaign": 15
+    }
+  ],
+  "mrr_outlier_reference": "https://doi.org/10.3390/app122211478",
+  "mrr_outlier_rule": "Fixed before modeling from published PHM16 evidence: four labels above 4000 are outliers while ordinary MRR values are below 170; ceiling 300.",
+  "validation_contract": "Model selected by 5-fold GroupKFold on earlier chronological campaigns; one final evaluation on the latest four untouched campaigns",
+  "development_campaigns": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14
+  ],
+  "final_campaigns": [
+    15,
+    16,
+    17,
+    18
+  ],
+  "development_samples": 1628,
+  "final_samples": 349,
+  "selected_model": "lightgbm",
+  "selected_development_metrics": {
+    "model": "lightgbm",
+    "lane": "development_group_oof",
+    "r2": 0.9796596821990391,
+    "rmse": 4.332441749475495,
+    "mae": 3.440377281314334,
+    "seconds": 20.560057399998186
+  },
+  "final_metrics": {
+    "r2": 0.9615333883223175,
+    "rmse": 5.546460963838005,
+    "mae": 4.249775441247565
+  },
+  "r2_gate": 0.8,
+  "r2_gate_passed": true,
+  "seconds": 644.358665799984
+}
