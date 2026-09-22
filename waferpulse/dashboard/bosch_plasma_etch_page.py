@@ -264,37 +264,22 @@ def _render_explainability(output_dir: Path) -> None:
             )
 
 
-def _run_regression(paths: WaferPulsePaths, refresh_cache: bool) -> None:
+def _run_full_benchmark(paths: WaferPulsePaths, refresh_cache: bool, threshold: float) -> None:
     try:
-        from waferpulse.experiments.bosch_plasma_etch_benchmark import run
+        from waferpulse.experiments.bosch_plasma_etch_benchmark import run as run_regression
+        from waferpulse.experiments.bosch_response_then_classify_benchmark import run as run_classification
 
-        with st.spinner("Running lot-held-out Bosch plasma-etch benchmark..."):
-            run(paths.bosch_data, paths.bosch_output, refresh_cache=refresh_cache)
-        st.success("Bosch regression evidence was rebuilt successfully.")
+        with st.spinner("Running complete Bosch benchmark suite (Regression + Defect Screening)..."):
+            run_regression(paths.bosch_data, paths.bosch_output, refresh_cache=refresh_cache)
+            run_classification(paths.bosch_data, paths.bosch_classification_output, threshold)
+        st.success("Bosch benchmark suite rebuilt successfully.")
     except FileNotFoundError:
         st.info(
             "ℹ️ Verified pre-computed benchmark evidence is already loaded and displayed below. "
             "Re-running from raw 5 Hz process streams requires the 2 GB Zenodo NetCDF files on a local GPU/workstation."
         )
     except Exception as exc:
-        st.error("The Bosch benchmark could not run.")
-        st.exception(exc)
-
-
-def _run_classification(paths: WaferPulsePaths, threshold: float) -> None:
-    try:
-        from waferpulse.experiments.bosch_response_then_classify_benchmark import run
-
-        with st.spinner("Running response-first high-etch screening benchmark..."):
-            run(paths.bosch_data, paths.bosch_classification_output, threshold)
-        st.success("Bosch research-screening evidence was rebuilt successfully.")
-    except FileNotFoundError:
-        st.info(
-            "ℹ️ Verified pre-computed benchmark evidence is already loaded and displayed below. "
-            "Re-running from raw 5 Hz process streams requires the 2 GB Zenodo NetCDF files on a local GPU/workstation."
-        )
-    except Exception as exc:
-        st.error("The Bosch screening benchmark could not run.")
+        st.error("The Bosch benchmark suite could not run.")
         st.exception(exc)
 
 
@@ -328,18 +313,12 @@ def render_bosch_plasma_etch_page(
     )
     refresh_cache = sidebar.checkbox("Rebuild process-feature cache", value=False)
 
-    run_regression, run_screening = st.columns(2)
-    if run_regression.button(
-        "Rebuild lot-held-out regression",
+    if st.button(
+        "⚡ Re-Run Complete Bosch Benchmark Suite (Regression & Screening)",
         type="primary",
         use_container_width=True,
     ):
-        _run_regression(paths, refresh_cache)
-    if run_screening.button(
-        "Rebuild research screening",
-        use_container_width=True,
-    ):
-        _run_classification(paths, threshold)
+        _run_full_benchmark(paths, refresh_cache, threshold)
 
     summary = _read_json(paths.bosch_output / "summary.json")
     metrics = _read_metrics(paths.bosch_output / "metrics.csv")
