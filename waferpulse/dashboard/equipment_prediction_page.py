@@ -57,9 +57,9 @@ def _render_configuration(sidebar: Any) -> PageConfiguration:
     return PageConfiguration(
         stage_mode=stage_mode,
         max_invalid_rate=invalid_percent / 100.0,
-        folds=sidebar.slider("Lot-grouped validation folds", 3, 5, 5),
-        selected_features=sidebar.slider("Selected temporal features", 40, 200, 120, 10),
-        estimators=sidebar.slider("Trees per candidate", 60, 300, 180, 20),
+        folds=sidebar.slider("Lot-grouped validation folds", 3, 5, 3),
+        selected_features=sidebar.slider("Selected temporal features", 40, 200, 60, 10),
+        estimators=sidebar.slider("Trees per candidate", 40, 200, 60, 20),
     )
 
 
@@ -67,20 +67,17 @@ def _render_actions(
     paths: WaferPulsePaths,
     crew: EquipmentPredictionCrew,
     config: PageConfiguration,
+    has_saved_model: bool = False,
 ) -> None:
     if LOG_STATE_KEY not in st.session_state:
         st.session_state[LOG_STATE_KEY] = []
 
-    validate_col, train_col = st.columns(2)
-    validate_clicked = validate_col.button(
-        "1. Validate & Build Features",
-        type="secondary",
-        use_container_width=True,
-    )
-    train_clicked = train_col.button(
-        "2. Train & Validate Real Models",
+    btn_label = "⚡ Re-Run Multi-Agent Pipeline (Live Retraining)" if has_saved_model else "🚀 Run Multi-Agent Equipment Pipeline (Feature & Model Build)"
+    run_clicked = st.button(
+        btn_label,
         type="primary",
         use_container_width=True,
+        help="Executes Agent 1 (EquipmentData validation & temporal features) followed by Agent 2 (GroupKFold model training & evidence generation)."
     )
     log_placeholder = st.empty()
 
@@ -88,30 +85,14 @@ def _render_actions(
         st.session_state[LOG_STATE_KEY].append(str(message))
         log_placeholder.code("\n".join(st.session_state[LOG_STATE_KEY][-20:]))
 
-    if validate_clicked or train_clicked:
+    if run_clicked:
         st.session_state[LOG_STATE_KEY] = []
         if not paths.equipment_data.exists():
             st.error(f"EquipmentData directory not found: {paths.equipment_data}")
             return
 
-    if validate_clicked:
         try:
-            with st.spinner("Validating public sensor data and building temporal features..."):
-                dataset = crew.validate(
-                    data_dir=paths.equipment_data,
-                    stage_mode=config.stage_mode,
-                    max_invalid_rate=config.max_invalid_rate,
-                    log_func=ui_log,
-                )
-            st.session_state[DATASET_STATE_KEY] = dataset
-            st.session_state.pop(MODEL_STATE_KEY, None)
-            st.success("Real-data validation and feature engineering completed.")
-        except Exception as exc:
-            st.exception(exc)
-
-    if train_clicked:
-        try:
-            with st.spinner("Running honest out-of-fold validation by manufacturing lot..."):
+            with st.spinner("Running Multi-Agent Pipeline: Agent 1 (Feature Extraction) → Agent 2 (Model Validation)..."):
                 result = crew.run(
                     data_dir=paths.equipment_data,
                     output_dir=paths.equipment_output,
@@ -124,11 +105,11 @@ def _render_actions(
                 )
             st.session_state[MODEL_STATE_KEY] = result
             st.session_state.pop(DATASET_STATE_KEY, None)
-            st.success("Real-data model validation completed and evidence artifacts were saved.")
+            st.success("Multi-agent model validation completed and evidence artifacts were saved.")
         except Exception as exc:
             st.exception(exc)
 
-    if st.session_state[LOG_STATE_KEY] and not (validate_clicked or train_clicked):
+    if st.session_state[LOG_STATE_KEY] and not run_clicked:
         with st.expander("Latest execution log", expanded=False):
             st.code("\n".join(st.session_state[LOG_STATE_KEY][-20:]))
 
@@ -421,23 +402,17 @@ def render_equipment_prediction_page(
         st.subheader("EquipmentData wafer-response prediction")
         st.caption("equipment1.csv + equipment2.csv → continuous response and bad-wafer risk")
     config = _render_configuration(sidebar)
-    _render_actions(paths, crew, config)
-
     result, dataset, summary, quality, provenance = _active_evidence(paths.equipment_output)
-    if summary is None and result is None:
+    has_saved_model = (result is not None)
+    _render_actions(paths, crew, config, has_saved_model=has_saved_model)
+
+    if has_saved_model and LOG_STATE_KEY not in st.session_state:
+        st.caption("⚡ Showing pre-computed out-of-fold model evidence. Click the button above if you wish to re-train live.")
+    elif summary is None and result is None:
         st.info(
-            "Start with **Validate & Build Features** to inspect the source-data gate, or run "
-            "the complete real-model pipeline. No synthetic fallback will be used if a source fails."
+            "Click **Run Multi-Agent Equipment Pipeline** above to execute Agent 1 (Feature Extraction) and Agent 2 (Model Validation)."
         )
         return
-
-    if summary and quality is not None and provenance is not None:
-        _render_quality_gate(summary, quality, provenance)
-    elif result is not None:
-        st.info(
-            "Saved out-of-fold model evidence was loaded. Rebuild the model once to add the "
-            "new persisted data-quality summary to this older artifact set."
-        )
     if dataset is not None:
         _render_feature_preview(dataset)
     if result is not None:

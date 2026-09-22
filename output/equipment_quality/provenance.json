@@ -1,0 +1,47 @@
+{
+  "lane": {
+    "key": "real_open_source",
+    "label": "REAL OPEN-SOURCE DATA",
+    "evidence_level": "Model validation",
+    "description": "Public semiconductor equipment-sensor measurements with wafer response labels. Used for data validation, temporal feature engineering, prediction, and model explanation.",
+    "allowed_functions": [
+      "data_quality",
+      "feature_engineering",
+      "regression",
+      "classification",
+      "explainability",
+      "grouped_validation"
+    ],
+    "forbidden_claims": [
+      "Direct wafer-probe to final-test validation",
+      "Field reliability or MTTF validation"
+    ]
+  },
+  "dataset_name": "Semiconductor Frontend Equipment Sensor Data",
+  "dataset_version": "bf7c6d16fdcd7217",
+  "source_files": [
+    "D:\\APU\\Micron\\code -Micron(latest version)\\EquipmentData\\response.csv",
+    "D:\\APU\\Micron\\code -Micron(latest version)\\EquipmentData\\equipment1.csv",
+    "D:\\APU\\Micron\\code -Micron(latest version)\\EquipmentData\\equipment2.csv"
+  ],
+  "functions": [
+    "data_quality",
+    "feature_engineering",
+    "regression",
+    "classification",
+    "explainability",
+    "grouped_validation"
+  ],
+  "created_at_utc": "2026-09-20T04:35:26.413954+00:00",
+  "is_synthetic": false,
+  "source_sha256": {
+    "response.csv": "fc9a55bcd827e74208e68411344c6359d98de88459b6f08b9226742c2c03c434",
+    "equipment1.csv": "3aa274404504ab54933d62bb0656019e63d265d776100c8eacda40dfda234029",
+    "equipment2.csv": "66449a8260133bdd707dc1fd4d89e2e4c170b1bb45af6c707f26e98964616611"
+  },
+  "response_semantics": {
+    "continuous_target": "wafer response",
+    "bad_when": "response > 0.75",
+    "claim_limit": "Upstream equipment sensors to wafer-test response; not direct TP-to-FT validation."
+  }
+}

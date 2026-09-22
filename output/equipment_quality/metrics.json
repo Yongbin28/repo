@@ -1,0 +1,114 @@
+{
+  "validation": "StratifiedGroupKFold by manufacturing lot",
+  "n_splits": 5,
+  "selected_features": 120,
+  "regression_champion": "QualityHurdleForestBlend",
+  "classification_champion": "RandomForest",
+  "regression": {
+    "mae": 0.2229091477909871,
+    "rmse": 0.3875283745231268,
+    "r2": 0.15967076803853975
+  },
+  "classification": {
+    "pr_auc": 0.2926611564220606,
+    "roc_auc": 0.7536204744069913,
+    "recall_bad": 0.8,
+    "precision_bad": 0.327710843373494,
+    "false_negative_rate": 0.2,
+    "specificity": 0.651685393258427,
+    "brier_score": 0.15204557109327768,
+    "decision_threshold": 0.08043324658062267,
+    "tn": 522,
+    "fp": 279,
+    "fn": 34,
+    "tp": 136
+  },
+  "candidate_comparison": {
+    "regression": {
+      "QualityHurdleForestBlend": {
+        "mae": 0.2229091477909871,
+        "rmse": 0.3875283745231268,
+        "r2": 0.15967076803853975
+      },
+      "QualityHurdleSVM": {
+        "mae": 0.24056160751753045,
+        "rmse": 0.388726922673805,
+        "r2": 0.1544647877323283
+      },
+      "ExtraTrees": {
+        "mae": 0.24376635163218066,
+        "rmse": 0.4225595056038734,
+        "r2": 0.0008787191080428247
+      },
+      "RandomForest": {
+        "mae": 0.2412903972969058,
+        "rmse": 0.42178419236277087,
+        "r2": 0.004541736032044219
+      }
+    },
+    "classification": {
+      "ExtraTrees": {
+        "pr_auc": 0.29041917836214626,
+        "roc_auc": 0.7547771168392451,
+        "recall_bad": 0.4411764705882353,
+        "precision_bad": 0.30991735537190085,
+        "false_negative_rate": 0.5588235294117647,
+        "specificity": 0.7915106117353309,
+        "brier_score": 0.1545684902302657,
+        "decision_threshold": 0.5,
+        "tn": 634,
+        "fp": 167,
+        "fn": 95,
+        "tp": 75
+      },
+      "RandomForest": {
+        "pr_auc": 0.2926611564220606,
+        "roc_auc": 0.7536204744069913,
+        "recall_bad": 0.21764705882352942,
+        "precision_bad": 0.2483221476510067,
+        "false_negative_rate": 0.7823529411764706,
+        "specificity": 0.8601747815230961,
+        "brier_score": 0.15204557109327768,
+        "decision_threshold": 0.5,
+        "tn": 689,
+        "fp": 112,
+        "fn": 133,
+        "tp": 37
+      }
+    }
+  },
+  "diagnostics": {
+    "target_structure": {
+      "response_min": 0.36,
+      "response_max": 2.0286,
+      "response_std": 0.42296313741035857,
+      "class_mean_oracle_r2": 0.8074817929026213,
+      "lot_mean_oracle_r2": 0.5787616451691935,
+      "oracle_warning": "Uses actual labels/lots and is not a deployable model score.",
+      "good_response_std": 0.03325600053990427,
+      "bad_response_std": 0.43868472629665695,
+      "good_wafers": 801,
+      "bad_wafers": 170
+    },
+    "random_wafer_split": {
+      "mae": 0.18793409795487323,
+      "rmse": 0.3353800767057589,
+      "r2": 0.37061414628843126,
+      "warning": "Diagnostic only: wafers from the same lot can occur in training and validation."
+    },
+    "within_class_lot_grouped": {
+      "good": {
+        "mae": 0.028890030420654557,
+        "rmse": 0.03837439426123677,
+        "r2": -0.3331700802578357,
+        "samples": 801
+      },
+      "bad": {
+        "mae": 0.4111183256889906,
+        "rmse": 0.4503483659490658,
+        "r2": -0.06011839818900522,
+        "samples": 170
+      }
+    }
+  }
+}
