@@ -4107,3 +4107,60 @@ elif app_mode == "Wafer Analytics & Prediction":
             
         if show_preview:
             st.components.v1.html(cert_html, height=780, scrolling=True)
+
+        st.markdown("---")
+        st.subheader("4) 🤖 AI Fab Engineering Shift Handover Note")
+        st.caption("Powered by Groq Cloud (Llama 3.1 8B Instant) with automated deterministic fab rule fallback.")
+
+        with st.expander("⚙️ Optional Groq API Configuration", expanded=False):
+            groq_key_input = st.text_input(
+                "Groq Cloud API Key (Optional)",
+                type="password",
+                help="Get a free ultra-fast API key at https://console.groq.com. If left blank, the deterministic fab rule engine will be used automatically.",
+                key="groq_api_key_input"
+            )
+
+        if st.button("⚡ Generate AI Fab Shift Report", type="secondary", key="btn_generate_ai_shift"):
+            with st.spinner("Generating AI Fab Engineering Shift Report..."):
+                from waferpulse.tools.ai_report import generate_shift_handover_note
+                
+                # Determine spatial defect pattern text
+                pattern_desc = "Nominal Random Defect Distribution"
+                edge_n = spatial_res.get("edge_cluster_count", 0)
+                gdbn_n = spatial_res.get("gdbn_count", 0)
+                if edge_n > 10:
+                    pattern_desc = f"Perimeter Edge-Ring Cluster ({edge_n} edge dies)"
+                elif gdbn_n > 15:
+                    pattern_desc = f"Good Die in Bad Neighborhood (GDBN) Clustered Faults ({gdbn_n} dies)"
+                    
+                outlier_names = list(shifted_probe_tests)[:3] if 'shifted_probe_tests' in locals() and shifted_probe_tests else []
+                total_wafer_dies = len(wafer_map_df) if (wafer_map_df is not None and not wafer_map_df.empty) else 650
+                failed_wafer_dies = int(fail_dies) if 'fail_dies' in locals() else int(total_wafer_dies * (1 - pred))
+                
+                ai_result = generate_shift_handover_note(
+                    wafer_id=f"{p_lot_id}-01",
+                    product_generic=p_generic,
+                    part_number=p_partname or "N/A",
+                    predicted_yield=pred,
+                    historical_avg_yield=baseline_yield,
+                    reliability_grade=f"Grade {grade} ({desc})",
+                    defect_pattern=pattern_desc,
+                    num_fail_dies=failed_wafer_dies,
+                    total_dies=total_wafer_dies,
+                    top_outliers=outlier_names,
+                    api_key=groq_key_input.strip() if groq_key_input else None,
+                )
+                st.session_state["fab_shift_note"] = ai_result
+
+        if "fab_shift_note" in st.session_state:
+            res_note = st.session_state["fab_shift_note"]
+            st.info(f"Generated via: **{res_note['source']}**")
+            st.markdown(res_note["note"])
+            
+            st.download_button(
+                label="📥 Download Shift Handover Report (.txt)",
+                data=res_note["note"],
+                file_name=f"Fab_Shift_Handover_{p_lot_id}.txt",
+                mime="text/plain",
+                key="btn_download_shift_note"
+            )
