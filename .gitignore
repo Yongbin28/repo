@@ -43,6 +43,24 @@ ETS364B/
 *.pkl
 *.keras
 
+# Whitelist lightweight demo sample lots and baseline models for cloud showcase
+!dataset/J750/
+!dataset/J750/DDR4SDRAM_MT40A1G8/
+!dataset/J750/DDR4SDRAM_MT40A1G8/ddr4_limits.csv
+!dataset/J750/DDR4SDRAM_MT40A1G8/*.csv
+!dataset/J750/DDR4SDRAM_MT40A1G8/Model/
+!dataset/J750/DDR4SDRAM_MT40A1G8/Model/model_ElasticNet_*.joblib
+!dataset/J750/DDR4SDRAM_MT40A1G8/Model/model_Lasso_*.joblib
+!dataset/J750/DDR4SDRAM_MT40A1G8/Model/feature_names_*.json
+
+!dataset/J750/DDR5DRAM_MT41K256M16-MT/
+!dataset/J750/DDR5DRAM_MT41K256M16-MT/ddr5_limits.csv
+!dataset/J750/DDR5DRAM_MT41K256M16-MT/*.csv
+!dataset/J750/DDR5DRAM_MT41K256M16-MT/Model/
+!dataset/J750/DDR5DRAM_MT41K256M16-MT/Model/model_ElasticNet_*.joblib
+!dataset/J750/DDR5DRAM_MT41K256M16-MT/Model/model_Lasso_*.joblib
+!dataset/J750/DDR5DRAM_MT41K256M16-MT/Model/feature_names_*.json
+
 # The only bundled model is independently verified on untouched PHM16 CMP
 # campaigns and is required by the production virtual-metrology page.
 !waferpulse/artifacts/

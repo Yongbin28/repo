@@ -1,0 +1,22 @@
+Test Number,Test Description,Units,STDF Min,STDF Max
+T1.0,VDD Supply voltage,V,1.14,1.26
+T1.1,VDDQ Supply voltage for output,V,1.14,1.26
+T1.2,VPP Wordline supply voltage,V,2.375,2.75
+T2.0,VDD_sl VDD Slew rate,V/ms,0.004,600
+T3.0,IIN Input leakage,uA,-2,2
+T3.1,IZQ ZQ leakage,uA,-50,10
+T3.2,ITEN TEN leakage,uA,-6,10
+T3.3,IVREFCA VREFCA leakage,uA,-2,2
+T4.0,VIH(AC)_RESET AC input high voltage,V,0.96,1.2
+T4.1,VIH(DC)_RESET DC input high voltage,V,0.84,1.2
+T4.2,VIL(DC)_RESET DC input low voltage,V,0,0.36
+T4.3,VIL(AC)_RESET AC input low voltage,V,0,0.24
+T5.0,VIH(AC) CMD/ADDR AC input high voltage,mV,700,1200
+T5.1,VIH(DC) CMD/ADDR DC input high voltage,mV,675,1200
+T5.2,VIL(DC) CMD/ADDR DC input low voltage,mV,0,525
+T5.3,VIL(AC) CMD/ADDR AC input low voltage,mV,0,500
+T6.0,SRCA Single-ended input slew rate - CA,V/ns,1,7
+T7.0,VIH(AC)_TEN TEN AC input high voltage,V,0.96,1.2
+T7.1,VIH(DC)_TEN TEN DC input high voltage,V,0.84,1.2
+T7.2,VIL(DC)_TEN TEN DC input low voltage,V,0,0.36
+T7.3,VIL(AC)_TEN TEN AC input low voltage,V,0,0.24

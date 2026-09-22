@@ -1,0 +1,18 @@
+Test Number,Test Description,Units,STDF Min,STDF Max
+T1.0,VDD Supply voltage,V,1.067,1.166
+T1.1,VDDQ Supply voltage for I/O,V,1.067,1.166
+T1.2,VPP Pump voltage,V,1.746,1.908
+T2.0,VDD_sl VDD Slew rate,V/ms,0.004,600
+T3.0,IIN Input leakage RESET_n,uA,-2,2
+T3.1,IIN_CApd Input leakage CA/CS_n/CK pd,uA,-2,2
+T3.2,IIN_CApu Input leakage CA/CS_n/CK pu,uA,-50,10
+T3.3,IZQ ZQ leakage,uA,-50,15
+T3.4,ITEN TEN leakage,uA,-6,10
+T3.5,ISTRAP Input leakage CAI/MIR/CA_ODT,uA,-6,10
+T3.6,IOZpd Output leakage pd,uA,-15,15
+T3.7,IOZpu Output leakage pu,uA,-50,10
+T4.0,VIH(AC) Input HIGH voltage,V,0.85,1.166
+T4.1,VIH(DC) Input HIGH voltage,V,0.77,1.166
+T4.2,VIL(DC) Input LOW voltage,V,0,0.33
+T4.3,VIL(AC) Input LOW voltage,V,0,0.25
+T5.0,Operating temperature,°C,0,95
