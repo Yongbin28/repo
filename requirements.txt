@@ -8,6 +8,4 @@ catboost>=1.2.0
 lightgbm>=4.1.0
 plotly>=5.18.0
 openpyxl>=3.1.2
-selenium>=4.1.0
-playwright>=1.40.0
 optuna>=3.0.0
