@@ -225,24 +225,6 @@ def _render_quality_gate(
         f"Matched {summary['matched_wafers']:,} wafers across {summary['matched_lots']} manufacturing lots · "
         f"{summary['feature_count']:,} engineered temporal features across active sensors."
     )
-    quality_view = sensor_quality.copy()
-    if "status" in quality_view.columns:
-        quality_view = quality_view[quality_view["status"] != "DROPPED"]
-    display_cols = [
-        col
-        for col in ["equipment", "sensor", "rows", "numeric_unique"]
-        if col in quality_view.columns
-    ]
-    quality_view = quality_view.sort_values(
-        [col for col in ["equipment", "sensor"] if col in quality_view.columns],
-        ascending=True,
-    )
-    st.dataframe(
-        quality_view[display_cols],
-        use_container_width=True,
-        hide_index=True,
-        height=330,
-    )
 
 
 def _render_feature_preview(dataset: Any) -> None:
