@@ -31,7 +31,7 @@ Mapping of project requirements (established for the Micron Intelligent Wafer Qu
 | **Equation 3.28 Exponential Neighbor Penalty** | Goes beyond simple wafer yield by penalizing surviving dies that border large defect clusters, preventing early-life field failures in mission-critical DRAM. |
 | **SHAP Model Interpretability** | Incorporates Shapley Additive Explanations (SHAP) to explain which electrical parameters (e.g. `V_DD`, `I_CC`, `T_ACCESS`) most heavily degrade wafer yield. |
 | **Production User Management CLI** | Built [`manage_users.py`](file:///d:/APU/Micron/code%20-Micron(latest%20version)/manage_users.py) enabling sysadmins to securely create, update, and revoke user access credentials from the terminal. |
-| **Rigorous 37-Test Automated Verification** | Comprehensive test suite covering authentication, STDF decoding, CMP regression, data lanes, and pipeline orchestration with 100% passing tests. |
+| **Rigorous 39-Test Automated Verification** | Comprehensive test suite covering authentication, STDF decoding, CMP regression, data lanes, and pipeline orchestration with 100% passing tests. |
 
 ---
 
@@ -54,4 +54,4 @@ Mapping of project requirements (established for the Micron Intelligent Wafer Qu
 | **CMP Material Removal RMSE** | $< 5.0$ nm | **$1.38$ nm** | 🏆 Exceeded |
 | **STDF Lot Decryption Speed** | $< 10.0$ s per lot | **$1.85$ s** (1 MB streaming chunks) | 🏆 Exceeded |
 | **Cloud Deployment Availability** | 99.0% uptime | **100% Public HTTPS** (`waferpulse.streamlit.app`) | 🏆 Exceeded |
-| **Automated Test Pass Rate** | $100\%$ on core suite | **$100\%$ (All 37 test cases passing)** | 🏆 Perfect |
+| **Automated Test Pass Rate** | $100\%$ on core suite | **$100\%$ (All 39 test cases passing)** | 🏆 Perfect |
