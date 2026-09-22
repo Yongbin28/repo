@@ -169,14 +169,11 @@ def compute_reliability_score(
     if golden_similarity_ft is None:
         golden_similarity_ft = 0.5 * s_ft_corr + 0.5 * ft_z_closeness
 
-    target_mttf = 15.0
-    s_mttf = np.clip((mttf_years / target_mttf) * 100, 0, 100)
-
-    # Updated formula: 30% Probe Golden Similarity + 30% FT Golden Similarity + 40% MTTF Score
+    # Equation 3.28 from FYP Phase 1 Report:
+    # S = 0.5 * S_Probe + 0.5 * S_FT - P_Yield
     composite_score = (
-        (0.30 * golden_similarity_probe) +
-        (0.30 * golden_similarity_ft) +
-        (0.40 * s_mttf)
+        (0.50 * golden_similarity_probe) +
+        (0.50 * golden_similarity_ft)
     )
 
     yield_penalty = 0.0
@@ -190,7 +187,6 @@ def compute_reliability_score(
         "Components": {
             "Golden_Correlation": float(corr_value),
             "Golden_Correlation_Score": float(s_corr),
-            "MTTF_Score": float(s_mttf),
             "Yield_Penalty": float(yield_penalty),
             "Probe_Similarity": float(golden_similarity_probe),
             "FT_Similarity": float(golden_similarity_ft),
@@ -206,17 +202,21 @@ def compute_reliability_score(
 
 def compute_product_grade(
     risk_score: float,
-    mttf_years: float,
-    golden_correlation: float,
+    mttf_years: float = None,
+    golden_correlation: float = 0.0,
     predicted_yield: float = 1.0,
 ) -> dict:
     """
-    Standalone post-packaging product grade classification.
+    Standalone post-packaging product grade classification per Table 3-6 of Phase 1 Report:
+    - Grade A (Automotive): Score >= 90
+    - Grade B (Industrial): Score >= 75
+    - Grade C (Consumer): Score >= 60
+    - Grade D (Scrap/Reject): Score < 60
     """
     if risk_score >= 90:
         grade = "A"
         desc = "Automotive"
-    elif risk_score >= 80:
+    elif risk_score >= 75:
         grade = "B"
         desc = "Industrial"
     elif risk_score >= 60:
@@ -224,28 +224,16 @@ def compute_product_grade(
         desc = "Consumer"
     else:
         grade = "D"
-        desc = ""
+        desc = "Scrap"
 
-    # Cascading MTTF requirements per grade:
-    # Grade A: minimum 15 years, Grade B: minimum 10 years, Grade C: minimum 5 years.
-    if grade == "A" and mttf_years < 15.0:
-        grade = "B"
-        desc = "Industrial"
-    if grade == "B" and mttf_years < 10.0:
-        grade = "C"
-        desc = "Consumer"
-    if grade == "C" and mttf_years < 5.0:
+    if predicted_yield < 0.60:
         grade = "D"
-        desc = ""
-
-    if mttf_years < 3.0 or predicted_yield < 0.60:
-        grade = "D"
-        desc = ""
+        desc = "Scrap"
 
     corr_value = pd.to_numeric(golden_correlation, errors="coerce")
     if not pd.isna(corr_value) and float(corr_value) < 0.20 and grade != "D":
         grade = "D"
-        desc = ""
+        desc = "Scrap"
 
     return {
         "Grade": grade,
@@ -255,7 +243,7 @@ def compute_product_grade(
 
 def score_post_packaging_reliability(
     wafer_id: str,
-    mttf_years: float,
+    mttf_years: float = None,
     golden_correlation: float = 0.0,
     predicted_yield: float = 1.0,
     golden_similarity_probe: float = None,

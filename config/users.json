@@ -1,0 +1,19 @@
+{
+  "users": {
+    "admin": {
+      "name": "Quality Lead Administrator",
+      "password_hash": "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9",
+      "role": "Lead Administrator"
+    },
+    "engineer": {
+      "name": "Fab Process Engineer",
+      "password_hash": "80ca306ac6e68366dd0a26125c9647e0c61fac6668cec6016f5fe30fb12e99bd",
+      "role": "Process Engineer"
+    },
+    "auditor": {
+      "name": "Quality Auditor",
+      "password_hash": "5b92db4dfb561dc69c949f34d36f5db0f8b30811be3a2949d85c5001279e9b1a",
+      "role": "Quality Auditor"
+    }
+  }
+}

@@ -72,18 +72,24 @@ sys.path.append(str(CURRENT_DIR))
 
 
 # --- Config ---
+import importlib
+import utils
+importlib.reload(utils)
+
 from utils import (
     log, get_tester_family_for_generic, get_generics_by_tester,
     get_all_generics_from_map, select_decryptor, TESTER_MAPPING_FILE,
     explode_and_collect_data_files, _is_combo_folder_name,
-    shorten_wafer_list, infer_combo_folder_name, extract_fiscal_year
+    shorten_wafer_list, infer_combo_folder_name, extract_fiscal_year,
+    discover_dataset_products, sniff_dlog_metadata
 )
-import utils
+from waferpulse.core.data_lanes import LOCAL_DEMONSTRATION
+from waferpulse.dashboard.components import render_data_lane_notice
 DATASET_ROOT = CURRENT_DIR / "dataset"
 STATUS_FILE = CURRENT_DIR / "pipeline_status.json"
 
 # --- UI Setup ---
-st.set_page_config(page_title="Explainable AI-Driven Wafer Reliability Risk Gate", layout="wide")
+st.set_page_config(page_title="WaferPulse — Semiconductor Quality Risk Detection", layout="wide")
 
 # Inject Custom CSS for Sticky Header and Layout Compaction
 st.markdown(
@@ -121,7 +127,7 @@ st.markdown(
 )
 
 # Apply sticky header class to the title using a container
-st.markdown('<div class="sticky-header"><h1>Explainable AI-Driven Wafer Reliability Risk Gate</h1></div>', unsafe_allow_html=True)
+st.markdown('<div class="sticky-header"><h1>WaferPulse — Explainable AI for Semiconductor Quality Risk Detection</h1></div>', unsafe_allow_html=True)
 
 # --- Session State ---
 if "logs" not in st.session_state:
@@ -151,6 +157,7 @@ def format_time(seconds):
         return f"{m}m {s}s"
     h, m = divmod(m, 60)
     return f"{h}h {m}m {s}s"
+
 
 def free_up_onedrive_space(folder_path):
     """
@@ -916,6 +923,7 @@ def stable_seed(key: str) -> int:
     return int(h[:8], 16)
 
 def historical_avg_yield(lot_id: str) -> float:
+    """Return a deterministic synthetic fallback for the local demonstration lane only."""
     rng = np.random.default_rng(stable_seed(f"HIST\n{lot_id}"))
     base = rng.uniform(0.86, 0.98)
     return float(np.clip(rng.normal(base, 0.008), 0, 1))
@@ -2024,11 +2032,29 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# --- Authentication Sign-In Gate ---
+from waferpulse.core.auth import render_auth_gate
+
+if not render_auth_gate():
+    st.stop()
+
 sidebar = st.sidebar
 sidebar.header("🎛️ Navigation")
-app_mode = sidebar.radio("Select Mode", ["Model Preparation Pipeline", "Single Lot Analytics & Prediction"], help="Switch between batch data preparation and single lot yield prediction.")
+app_mode = sidebar.radio(
+    "Select Mode",
+    [
+        "Model Preparation Pipeline",
+        "Model Prediction & Validation",
+        "Wafer Analytics & Prediction",
+    ],
+    help=(
+        "Use Model Prediction & Validation to select EquipmentData, the Zenodo "
+        "BOSCH benchmark, or a local table for read-only exploration."
+    ),
+)
 
 if app_mode == "Model Preparation Pipeline":
+    render_data_lane_notice(LOCAL_DEMONSTRATION)
     sidebar.header("Configuration")
 
     # --- Auto-invalidate @st.cache_resource if TesterFamilyMap.xlsx changes on disk ---
@@ -2096,9 +2122,18 @@ if app_mode == "Model Preparation Pipeline":
     skip_existing = sidebar.checkbox("Skip Already Processed", value=True, key="skip_existing")
     
     sidebar.markdown("---")
-    sidebar.subheader("Machine Learning")
-    run_feature_extraction_step = sidebar.checkbox("Run Feature Extraction", value=True, key="run_feature_extraction")
-    run_model_training_step = sidebar.checkbox("Run Model Training", value=True, key="run_model_training")
+    sidebar.subheader("Local Demonstration Preparation")
+    run_feature_extraction_step = sidebar.checkbox(
+        "Prepare local statistical features",
+        value=True,
+        key="run_feature_extraction",
+        help="Prepares local/STDF statistics used by the demonstration modules.",
+    )
+    run_model_training_step = False
+    sidebar.caption(
+        "Prediction-model training is disabled in this lane. Use Open-Source Equipment "
+        "Prediction for reportable model training and validation."
+    )
 
     def handle_run():
         st.session_state.processing = True
@@ -2160,7 +2195,11 @@ if app_mode == "Model Preparation Pipeline":
 
             # --- Section 2: Model Validation Analytics ---
             st.markdown("---")
-            st.subheader("2) Model Validation Analytics")
+            st.subheader("2) Legacy Local-Model Artifacts")
+            st.caption(
+                "These artifacts are retained for functional demonstration only. Reportable prediction "
+                    "performance is produced in the Zenodo BOSCH lane under Model Prediction & Validation."
+            )
             
             processed_generics = [g for g, s in st.session_state.generic_results.items() if "Success" in s]
             if not processed_generics:
@@ -2282,7 +2321,7 @@ if app_mode == "Model Preparation Pipeline":
         1. **Database**: Scrapes data.
         2. **Decryption**: Converts to CSV.
         3. **Combiner**: Merges wafer data.
-        4. **ML**: Extract features & Train models.
+        4. **Statistics**: Prepare local features for SPC, PSI, historical comparison and spatial analysis.
         """)
 
     # Run Logic
@@ -2315,22 +2354,96 @@ if app_mode == "Model Preparation Pipeline":
     elif st.session_state.get("pipeline_metrics") and st.session_state.get("logs") and not st.session_state.processing:
         render_dashboard(st.session_state.pipeline_metrics, dashboard_ph)
 
-elif app_mode == "Single Lot Analytics & Prediction":
+elif app_mode == "Model Prediction & Validation":
+    from waferpulse.dashboard.model_prediction_workspace import (
+        render_model_prediction_workspace,
+    )
+
+    render_model_prediction_workspace(CURRENT_DIR, sidebar)
+elif app_mode == "Wafer Analytics & Prediction":
     import ml_yield_prediction
     import ml_train_model
     
     st.sidebar.markdown("---")
-    st.sidebar.subheader("Predictor Inputs")
-    p_generic = st.sidebar.text_input("Generic (e.g. DDR4SDRAM)", "")
-    p_partname = st.sidebar.text_input("Part Number(e.g. MT40A1G8)", "")
-    p_dlog = st.sidebar.file_uploader("Upload DLog File", type=[".stdf", ".std", ".std_1", ".gz", ".zip", ".csv"], help="Upload a DLog file to predict yield.")
-    
-    st.sidebar.markdown("---")
-    auto_pipeline = st.sidebar.checkbox("Execute pipeline if model not found", value=False, help="Automatically runs the full Data Prep pipeline to generate models if none exist for this Generic.")
-    
-    
+    st.sidebar.subheader("Wafer Analytics Inputs")
 
-    st.header("🧬 Wafer Analytics and Predictive Gateway")
+    # 1. Automatically discover products directly from existing dataset folders
+    all_discovered = discover_dataset_products()
+    available_prods = [
+        p for p in all_discovered 
+        if p.get("generic") in ["DDR4SDRAM", "DDR5DRAM"] or p.get("has_model") or (p.get("path") / "T&P_Decrypted").exists()
+    ]
+
+    selected_file_path = None
+    uploaded_file_obj = None
+
+    if available_prods:
+        prod_labels = [p["label"] for p in available_prods]
+        sel_prod_label = st.sidebar.selectbox(
+            "Select Product / Generic",
+            options=prod_labels,
+            index=0,
+            help="Discovered automatically from existing folders in dataset/"
+        )
+        selected_prod = next(p for p in available_prods if p["label"] == sel_prod_label)
+        p_generic = selected_prod["generic"]
+        p_partname = selected_prod["partname"]
+
+        # 2. Lot / Wafer File Selector
+        lot_files = selected_prod.get("files", [])
+        file_options = [f["label"] for f in lot_files] + ["📂 Upload Custom DLog File..."]
+        
+        sel_file_choice = st.sidebar.selectbox(
+            "Select Lot / Wafer File",
+            options=file_options,
+            index=0,
+            help="Select an existing lot file from the dataset or upload a new one."
+        )
+
+        if sel_file_choice == "📂 Upload Custom DLog File...":
+            p_dlog = st.sidebar.file_uploader(
+                "Upload DLog File",
+                type=[".stdf", ".std", ".std_1", ".gz", ".zip", ".csv"],
+                help="Upload a custom ATE DLog file."
+            )
+            if p_dlog is not None:
+                uploaded_file_obj = p_dlog
+        else:
+            selected_file_info = next(f for f in lot_files if f["label"] == sel_file_choice)
+            selected_file_path = selected_file_info["path"]
+
+        st.sidebar.success(
+            f"🔍 **Auto-Loaded Metadata:**\n"
+            f"- **Generic:** `{p_generic}`\n"
+            f"- **Part:** `{p_partname or 'N/A'}`\n"
+            f"- **Tester:** `{selected_prod['family']}`\n"
+            f"- **Selected File:** `{selected_file_path.name if selected_file_path else (uploaded_file_obj.name if uploaded_file_obj else 'None')}`"
+        )
+    else:
+        # Fallback if no dataset folders are found
+        p_generic = st.sidebar.text_input("Generic (Product Family)", value="DDR4SDRAM")
+        p_partname = st.sidebar.text_input("Part Number (Device Variant)", value="MT40A1G8")
+        p_dlog = st.sidebar.file_uploader(
+            "Upload DLog File",
+            type=[".stdf", ".std", ".std_1", ".gz", ".zip", ".csv"]
+        )
+        if p_dlog is not None:
+            uploaded_file_obj = p_dlog
+
+    st.sidebar.markdown("---")
+    auto_pipeline = st.sidebar.checkbox(
+        "Execute pipeline if model not found",
+        value=False,
+        help="Automatically runs the full Data Prep pipeline to generate models if none exist for this Generic.",
+    )
+    
+    render_data_lane_notice(LOCAL_DEMONSTRATION)
+    st.header("🧬 Local SPC/PSI, Historical and Spatial Demonstration")
+    st.caption(
+        "Outputs in this workspace demonstrate STDF parsing, SPC, PSI, historical comparison, "
+        "GDBN and dashboard behavior. Use the Zenodo BOSCH lane under Model Prediction & "
+        "Validation for the current reportable benchmark."
+    )
     
     if p_generic:
         models_found = ml_yield_prediction.get_models_for_generic(p_generic, p_partname)
@@ -2353,17 +2466,16 @@ elif app_mode == "Single Lot Analytics & Prediction":
             st.success(f"[INFO] Found {len(models_found)} models for '{p_generic}'. Ready to predict.")
             
         # Unified Start Button
-        if st.button("Predict Yield from DLOG", type="primary"):
+        if st.button("Run Local Analytics Demonstration", type="primary"):
+            has_file = uploaded_file_obj is not None or selected_file_path is not None
             if not models_found and auto_pipeline:
-                 # The auto pipeline is triggered, although a Streamlit rerun may interrupt further prediction.
-                 # The simplest approach is to prompt the user to wait for the pipeline and then click predict again.
                  st.session_state.processing = True
                  st.session_state.start_pipeline = True
                  st.session_state.auto_generic = p_generic
                  st.rerun()
                  
-            elif not p_dlog:
-                st.error("Please provide a path to the DLog file.")
+            elif not has_file:
+                st.error("Please select a lot file or upload a DLog file.")
             else:
                 st.markdown("### Process Log")
                 log_container = st.empty()
@@ -2373,13 +2485,17 @@ elif app_mode == "Single Lot Analytics & Prediction":
                     ui_logs.append(msg)
                     log_container.code("\n".join(ui_logs))
                 
-                with st.spinner("Processing DLog (Decrypting (DLog) -> Featurizing -> Predicting)..."):
-                    # Create a temporary directory to preserve the original filename
+                with st.spinner("Processing local DLog for SPC/PSI/spatial demonstration..."):
                     temp_dir_predict = Path(tempfile.mkdtemp(prefix="predict_"))
-                    temp_path = temp_dir_predict / p_dlog.name
                     try:
-                        with open(temp_path, "wb") as f:
-                            f.write(p_dlog.getbuffer())
+                        if uploaded_file_obj is not None:
+                            temp_path = temp_dir_predict / uploaded_file_obj.name
+                            with open(temp_path, "wb") as f:
+                                f.write(uploaded_file_obj.getbuffer())
+                            filename_str = uploaded_file_obj.name
+                        else:
+                            temp_path = selected_file_path
+                            filename_str = selected_file_path.name
                         
                         result = ml_yield_prediction.predict_from_dlog(p_generic, p_partname, temp_path, log_func=ui_logger)
                         if result["status"] != "success":
@@ -2395,12 +2511,14 @@ elif app_mode == "Single Lot Analytics & Prediction":
                         if avg_val > 1.0: avg_val /= 100.0
                         
                         # A simulated Lot ID is derived based on the filename.
-                        parts = p_dlog.name.split('_')
+                        parts = filename_str.split('_')
                         derived_lot_id = f"{parts[0]}_{parts[1]}" if len(parts) >= 2 and parts[0] == "SYN" else parts[0].split('.')[0]
                         if len(derived_lot_id) < 4: derived_lot_id = "P070238.1"
                         
                         st.session_state["p_wafer"] = {
                             "Wafer_ID": f"{derived_lot_id}-01",
+                            "data_lane": LOCAL_DEMONSTRATION,
+                            "is_synthetic": "SYN" in filename_str.upper(),
                             "Predicted_Yield": float(np.clip(avg_val, 0, 1)),
                             "details": result.get("predictions", {}),
                             "shap_data": result.get("shap_data", {}),
@@ -2415,8 +2533,9 @@ elif app_mode == "Single Lot Analytics & Prediction":
                         st.session_state["p_hist_avg"] = historical_avg_yield(derived_lot_id)
                         st.session_state["p_done"] = True
                         st.session_state["p_lot_id"] = derived_lot_id
-                        st.session_state["p_year"] = extract_fiscal_year(p_dlog.name)
-                        st.session_state["p_filename"] = p_dlog.name
+                        st.session_state["p_year"] = extract_fiscal_year(filename_str)
+                        st.session_state["p_filename"] = filename_str
+
 
     if st.session_state.get("p_done"):
         import reliability_grading
@@ -2504,15 +2623,8 @@ elif app_mode == "Single Lot Analytics & Prediction":
                 "wafer_map_df": pd.DataFrame(),
             }
 
-        # 3. Reliability Scoring Framework & Product Grade Classification
-        # Extract WaferPulse (WP) Performance metrics for unified display and scoring
-        wp_mttf = 0.0
+        # 3. Reliability Scoring Framework & Product Grade Classification (Equation 3.28)
         details = res.get("details", {})
-        if details:
-            top_model = list(details.keys())[0]
-            wp_res = details[top_model]
-            if isinstance(wp_res, dict) and "WP_MTTF_Years" in wp_res:
-                wp_mttf = wp_res['WP_MTTF_Years']
 
         # Build predicted FT stats dynamically from model predictions to replace the placeholder mock Z-score
         predicted_ft_stats = {}
@@ -2605,7 +2717,6 @@ elif app_mode == "Single Lot Analytics & Prediction":
 
         score_dict = reliability_grading.score_post_packaging_reliability(
             wafer_id=p_lot_id,
-            mttf_years=wp_mttf,
             golden_correlation=golden_correlation,
             predicted_yield=pred,
             golden_similarity_probe=golden_similarity_probe,
@@ -2620,12 +2731,7 @@ elif app_mode == "Single Lot Analytics & Prediction":
 
         grade = score_dict['Grade']
         ri_score = score_dict['Risk_Score']
-        desc = score_dict['Application']
-        
-        if grade == "D":
-            # Scale down the displayed Expected Lifespan (MTTF) to reflect high defect rates / process drift
-            wp_mttf = min(wp_mttf * 0.05, 2.8)
-            wp_mttf = max(wp_mttf, 0.5) 
+        desc = score_dict['Application'] 
         
         
         THR = {"Z": 0.98, "A": 0.95, "H": 0.90, "I": 0.85, "C": 0.80}
@@ -2842,7 +2948,7 @@ elif app_mode == "Single Lot Analytics & Prediction":
                                       st.info("Golden baseline or current parameter stats not available.")
 
         st.markdown("---")
-        st.subheader("2) AI Yield Prediction & Virtual Golden Wafer")
+        st.subheader("2) Local Demonstration Estimate & Virtual Golden Wafer")
         p_year = st.session_state.get("p_year", "Unknown")
         st.markdown(f"**Lot ID:** `{p_lot_id}` | **Fiscal Year:** `{p_year}`")
         
@@ -2880,7 +2986,7 @@ elif app_mode == "Single Lot Analytics & Prediction":
             else:
                 st.metric("Actual Yield", "N/A")
         with col2:
-            st.metric("Predicted Yield", f"{pred * 100:.2f}%", delta=f"{(pred - baseline_yield)*100:.2f}% vs Golden")
+            st.metric("Predicted Yield (Demo)", f"{pred * 100:.2f}%", delta=f"{(pred - baseline_yield)*100:.2f}% vs Golden")
 
         st.write("### 🔬 Virtual Golden Wafer Baseline Comparison")
         tab_ft_golden, tab_probe_golden = st.tabs([
@@ -3556,16 +3662,17 @@ elif app_mode == "Single Lot Analytics & Prediction":
         st.subheader("3) WaferPulse™ Reliability Product Grading")
         
         # 3-Column Layout for Post-Packaging Metrics
+        # 3-Column Layout for Post-Packaging Metrics (Equation 3.28)
         c1, c2, c3 = st.columns(3)
         c1.metric(
             label="Reliability Score",
             value=f"{ri_score:.2f} / 100",
             help=(
-                "Grading Standards:\n\n"
-                "Grade A (Automotive): Score >= 90 — Requires MTTF >= 15.0 Years.\n\n"
-                "Grade B (Industrial): Score >= 80 — Requires MTTF >= 10.0 Years.\n\n"
-                "Grade C (Consumer): Score >= 60 — Requires MTTF >= 5.0 Years.\n\n"
-                "Grade D (Reject): Score < 60 or MTTF < 3.0 Years."
+                "Grading Standards (Table 3-6):\n\n"
+                "Grade A (Automotive): Score >= 90\n\n"
+                "Grade B (Industrial): Score >= 75\n\n"
+                "Grade C (Consumer): Score >= 60\n\n"
+                "Grade D (Scrap/Reject): Score < 60"
             )
         )
         grade_display = f"Grade {grade}"
@@ -3575,40 +3682,36 @@ elif app_mode == "Single Lot Analytics & Prediction":
             label="Predicted Grade",
             value=grade_display,
             help=(
-                "Safety Overrides (Failure Gates):\n\n"
-                "Lifespan Safeguard: MTTF < 3.0 Years instantly forces Grade D (Reject).\n\n"
-                "Grade A/B/C Lifespan Gates: Demands >= 15Y, 10Y, and 5Y MTTF respectively "
-                "(cascades down if violated).\n\n"
-                "Low Yield Safeguard: Yield < 60% instantly forces Grade D (Reject).\n\n"
-                "Correlation Safeguard: Golden Correlation < 0.20 instantly forces Grade D (Reject)."
+                "Safety Overrides (Table 3-6):\n\n"
+                "Low Yield Safeguard: Yield < 60% instantly forces Grade D (Scrap).\n\n"
+                "Correlation Safeguard: Golden Correlation < 0.20 forces Grade D (Scrap)."
             )
         )
         c3.metric(
-            label="Reliability (MTTF)",
-            value=f"{wp_mttf:.2f} Years",
-            help="Predicted electromigration life span under nominal operating conditions."
+            label="Predicted FT Yield",
+            value=f"{pred * 100.0:.2f}%",
+            help="Predicted Final Test Yield from wafer probe regression models."
         )
         
         # Detail breakdown section
-        with st.expander("🔍 Reliability Score Component Breakdown", expanded=True):
+        with st.expander("🔍 Reliability Score Component Breakdown (Equation 3.28)", expanded=True):
             col_b1, col_b2, col_b3 = st.columns(3)
             with col_b1:
                 st.markdown("##### 🔬 Wafer Probe: Current vs Golden")
-                st.write(f"**Golden Similarity (WP):** `{score_dict['Components']['Probe_Similarity']:.1f} / 100` *(Weight: 30%)*")
+                st.write(f"**Golden Similarity (WP):** `{score_dict['Components']['Probe_Similarity']:.1f} / 100` *(Weight: 50%)*")
                 st.write(f"- Correlation Score: `{score_dict['Components']['Probe_Correlation_Score']:.1f}/100` *(Val: {score_dict['Components']['Probe_Correlation']:.4f})*")
                 st.write(f"- Z-score Closeness: `{score_dict['Components']['Probe_Z_Closeness']:.1f}/100`")
                 st.caption("Similarity calculated as 50% Pearson Correlation + 50% Z-score Closeness.")
             with col_b2:
                 st.markdown("##### 🏭 Final Test: Predicted vs Golden")
-                st.write(f"**Golden Similarity (FT):** `{score_dict['Components']['FT_Similarity']:.1f} / 100` *(Weight: 30%)*")
+                st.write(f"**Golden Similarity (FT):** `{score_dict['Components']['FT_Similarity']:.1f} / 100` *(Weight: 50%)*")
                 st.write(f"- Correlation Score: `{score_dict['Components']['FT_Correlation_Score']:.1f}/100` *(Val: {score_dict['Components']['FT_Correlation']:.4f})*")
                 st.write(f"- Z-score Closeness: `{score_dict['Components']['FT_Z_Closeness']:.1f}/100`")
                 st.caption("Similarity calculated as 50% Pearson Correlation + 50% Z-score Closeness.")
             with col_b3:
-                st.markdown("##### ⏳ Lifespan & Penalty Metrics")
-                st.write(f"**MTTF Score:** `{score_dict['Components']['MTTF_Score']:.1f} / 100` *(Weight: 40%)*")
-                st.write(f"**Yield Penalty:** `-{score_dict['Components']['Yield_Penalty']:.1f}`")
-                st.caption("MTTF achieved relative to target. Penalty deducted for high latent defect cluster risks in low-yield lots.")
+                st.markdown("##### ⚖️ Penalty Deductions")
+                st.write(f"**Yield Penalty (P_Yield):** `-{score_dict['Components']['Yield_Penalty']:.1f}`")
+                st.caption("S = 0.5 * S_Probe + 0.5 * S_FT - P_Yield per Equation 3.28.")
 
         
         # --- WAFER RELIABILITY HEALTH CERTIFICATE GENERATOR ---
@@ -3963,8 +4066,8 @@ elif app_mode == "Single Lot Analytics & Prediction":
                 <div class="stat-label">Predicted Yield</div>
             </div>
             <div class="stat-card">
-                <div class="stat-val" style="color: #3B82F6;">{wp_mttf:.2f} Yrs</div>
-                <div class="stat-label">Expected Lifespan</div>
+                <div class="stat-val" style="color: {primary_color};">Grade {grade}</div>
+                <div class="stat-label">Product Grade</div>
             </div>
         </div>
 
@@ -4004,7 +4107,3 @@ elif app_mode == "Single Lot Analytics & Prediction":
             
         if show_preview:
             st.components.v1.html(cert_html, height=780, scrolling=True)
-
-
-
-

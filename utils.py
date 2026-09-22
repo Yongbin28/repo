@@ -4,6 +4,7 @@ import os
 import sys
 import hashlib
 from pathlib import Path
+from typing import Any, Dict, Optional, Tuple, Union
 import streamlit as st
 
 # --- Path Configuration ---
@@ -352,3 +353,240 @@ def extract_fiscal_year(text: str) -> str:
         return matches[0]
         
     return "Unknown"
+
+
+def sniff_dlog_metadata(payload: Any, filename: str = "") -> dict:
+    """
+    Intelligently extracts semiconductor metadata (Generic, PartName, Lot ID, Tester) 
+    from binary STDF files, CSV text headers, or filenames, and cross-references with TesterFamilyMap.xlsx.
+    """
+    import struct
+
+    meta = {
+        "generic": "",
+        "partname": "",
+        "lot_id": "",
+        "job": "",
+        "tester": "",
+    }
+
+    file_bytes = b""
+    if isinstance(payload, Path) or (isinstance(payload, str) and os.path.isfile(str(payload))):
+        p = Path(payload)
+        filename = filename or p.name
+        try:
+            with open(p, "rb") as f:
+                file_bytes = f.read(65536)
+        except Exception:
+            pass
+    elif isinstance(payload, bytes):
+        file_bytes = payload[:65536]
+    elif hasattr(payload, "read"):
+        try:
+            pos = payload.tell() if hasattr(payload, "tell") else 0
+            file_bytes = payload.read(65536)
+            if hasattr(payload, "seek"):
+                payload.seek(pos)
+        except Exception:
+            pass
+    elif hasattr(payload, "getvalue"):
+        try:
+            file_bytes = payload.getvalue()[:65536]
+        except Exception:
+            pass
+
+    # 1. Binary STDF Master Information Record (MIR: type 1, sub 10)
+    if len(file_bytes) >= 4:
+        first_4 = file_bytes[:4]
+        try:
+            endian = ">" if struct.unpack(">H", first_4[:2])[0] == 2 else "<"
+            offset = 0
+            limit_search = min(len(file_bytes), 65536)
+            while offset < limit_search - 4:
+                rec_len, rec_typ, rec_sub = struct.unpack_from(f"{endian}HBB", file_bytes, offset)
+                offset += 4
+                if rec_typ == 1 and rec_sub == 10:  # MIR
+                    curr = offset + 15
+                    lim = offset + rec_len
+
+                    def _read_str(p: int) -> tuple[str, int]:
+                        if p >= lim:
+                            return "", p
+                        sl = file_bytes[p]
+                        p += 1
+                        if sl == 0 or p + sl > lim:
+                            return "", p + sl
+                        try:
+                            return file_bytes[p : p + sl].decode("utf-8", "ignore").strip(), p + sl
+                        except Exception:
+                            return "", p + sl
+
+                    lot, curr = _read_str(curr)
+                    ptyp, curr = _read_str(curr)
+                    node, curr = _read_str(curr)
+                    tstr, curr = _read_str(curr)
+                    job, _ = _read_str(curr)
+                    meta["lot_id"] = lot
+                    meta["partname"] = ptyp
+                    meta["tester"] = tstr or node
+                    meta["job"] = job
+                    break
+                offset += rec_len
+        except Exception:
+            pass
+
+    # 2. Text CSV / DLog header lines
+    if not meta["partname"] and not meta["lot_id"] and file_bytes:
+        try:
+            head_text = file_bytes[:4096].decode("utf-8", "ignore")
+            for line in head_text.splitlines()[:25]:
+                clean_l = line.strip()
+                m_part = re.search(r"(?:part\s*name|part|ptyp)[\s:=,]+([A-Za-z0-9_\-]+)", clean_l, re.I)
+                if m_part and not meta["partname"]:
+                    meta["partname"] = m_part.group(1).strip()
+                m_lot = re.search(r"(?:lot\s*id|lot)[\s:=,]+([A-Za-z0-9_\-]+)", clean_l, re.I)
+                if m_lot and not meta["lot_id"]:
+                    meta["lot_id"] = m_lot.group(1).strip()
+                m_gen = re.search(r"(?:generic)[\s:=,]+([A-Za-z0-9_\-]+)", clean_l, re.I)
+                if m_gen and not meta["generic"]:
+                    meta["generic"] = m_gen.group(1).strip()
+        except Exception:
+            pass
+
+    # 3. Infer from filename
+    if filename:
+        fn_clean = Path(filename).stem
+        tokens = re.split(r"[_.\-]+", fn_clean)
+        for tok in tokens:
+            t_upper = tok.upper()
+            if not meta["generic"] and t_upper in ["DDR4SDRAM", "DDR5SDRAM", "LPDDR4", "LPDDR5", "NAND"]:
+                meta["generic"] = t_upper
+            if not meta["partname"] and re.match(r"^MT[0-9A-Z]{5,}", t_upper):
+                meta["partname"] = t_upper
+            if not meta["lot_id"] and re.match(r"^(?:LOT|CDK|WAFER)[0-9A-Z]*", t_upper):
+                meta["lot_id"] = tok
+
+    # 4. Cross-reference with TesterFamilyMap.xlsx
+    try:
+        if TESTER_MAPPING_FILE.exists():
+            df = pd.read_excel(TESTER_MAPPING_FILE)
+            df.columns = [c.strip().lower() for c in df.columns]
+            p_col = next((c for c in df.columns if "part" in c), None)
+            g_col = next((c for c in df.columns if "generic" in c), None)
+            t_col = next((c for c in df.columns if "tester" in c), None)
+            if p_col and g_col:
+                if meta["partname"]:
+                    p_str = meta["partname"].strip().upper()
+                    match = df[df[p_col].astype(str).str.strip().str.upper() == p_str]
+                    if not match.empty:
+                        if not meta["generic"]:
+                            meta["generic"] = str(match.iloc[0][g_col]).strip()
+                        if not meta["tester"] and t_col:
+                            meta["tester"] = str(match.iloc[0][t_col]).strip()
+                elif meta["generic"]:
+                    g_str = meta["generic"].strip().upper()
+                    match = df[df[g_col].astype(str).str.strip().str.upper() == g_str]
+                    if not match.empty and not meta["partname"]:
+                        meta["partname"] = str(match.iloc[0][p_col]).strip()
+    except Exception:
+        pass
+
+    return meta
+
+
+def discover_dataset_products(dataset_root: Path = DATASET_ROOT) -> list:
+    """
+    Scans the dataset directory to automatically discover all available products (Generic, PartName),
+    along with their tester family, trained models, and available lot data files.
+    Allows the UI to present ready-to-use selections without manual user typing.
+    """
+    products = []
+    if not dataset_root.exists():
+        return products
+
+    candidate_prod_dirs = []
+    for top_dir in sorted(dataset_root.iterdir()):
+        if not top_dir.is_dir() or top_dir.name.startswith("."):
+            continue
+
+        # Check for tester family subdirectories (e.g. J750/DDR4SDRAM_MT40A1G8)
+        sub_dirs = [d for d in top_dir.iterdir() if d.is_dir() and not d.name.startswith(".")]
+        is_family = False
+        for sub in sub_dirs:
+            if (sub / "Model").exists() or (sub / "T&P_Decrypted").exists() or any(sub.glob("*.csv")):
+                candidate_prod_dirs.append((top_dir.name, sub))
+                is_family = True
+
+        # If top_dir is not a family folder, it could be a direct product folder
+        if not is_family and ((top_dir / "Model").exists() or (top_dir / "T&P_Decrypted").exists() or any(top_dir.glob("*.csv"))):
+            candidate_prod_dirs.append(("Default", top_dir))
+
+    for family, prod_dir in candidate_prod_dirs:
+        folder_name = prod_dir.name
+        # Example: DDR4SDRAM_MT40A1G8 -> Generic=DDR4SDRAM, PartName=MT40A1G8
+        if "_" in folder_name:
+            parts = folder_name.split("_", 1)
+            generic = parts[0]
+            partname = parts[1]
+        else:
+            generic = folder_name
+            partname = ""
+
+        # Collect available lot / wafer files
+        sample_files = []
+
+        # 1. Direct CSV/STDF files in the product directory
+        for f in sorted(prod_dir.glob("*.csv")):
+            if not f.name.endswith("_limits.csv") and not f.name.startswith("limit"):
+                m_yd = re.search(r"(\d+\.?\d*)%", f.name)
+                yd_str = f" [Yield: {m_yd.group(1)}%]" if m_yd else ""
+                m_lot = re.search(r"(SYN_\d+)", f.name)
+                lot_str = m_lot.group(1) if m_lot else f.stem[:15]
+                sample_files.append({
+                    "path": f,
+                    "name": f.name,
+                    "lot_id": lot_str,
+                    "label": f"Sample: {lot_str}{yd_str} ({f.name})"
+                })
+
+        for f in sorted(prod_dir.glob("*.stdf")):
+            sample_files.append({
+                "path": f,
+                "name": f.name,
+                "lot_id": f.stem,
+                "label": f"STDF Sample: {f.name}"
+            })
+
+        # 2. Historical lots in T&P_Decrypted
+        tp_dir = prod_dir / "T&P_Decrypted"
+        if tp_dir.is_dir():
+            for lot_dir in sorted(tp_dir.iterdir()):
+                if lot_dir.is_dir():
+                    csvs = list(lot_dir.glob("*.csv"))
+                    if csvs:
+                        m_yd = re.search(r"(\d+\.?\d*)%", lot_dir.name)
+                        yd_str = f" [Yield: {m_yd.group(1)}%]" if m_yd else ""
+                        m_lot = re.search(r"(SYN_\d+)", lot_dir.name)
+                        lot_str = m_lot.group(1) if m_lot else lot_dir.name[:15]
+                        sample_files.append({
+                            "path": csvs[0],
+                            "name": csvs[0].name,
+                            "lot_id": lot_str,
+                            "label": f"Historical: {lot_str}{yd_str} ({lot_dir.name})"
+                        })
+
+        has_model = (prod_dir / "Model").is_dir() and any((prod_dir / "Model").glob("*.joblib"))
+        
+        if sample_files or has_model:
+            label = f"{generic} — {partname} ({family})" if partname else f"{generic} ({family})"
+            products.append({
+                "label": label,
+                "generic": generic,
+                "partname": partname,
+                "family": family,
+                "path": prod_dir,
+                "has_model": has_model,
+                "files": sample_files,
+            })
+
+    return products

@@ -1,0 +1,7 @@
+-r requirements.txt
+
+# Optional research benchmarks; not imported by the desktop runtime.
+torch>=2.13.0
+imbalanced-learn>=0.14.0
+netCDF4>=1.7.0
+pyarrow>=15.0.0

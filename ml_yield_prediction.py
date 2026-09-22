@@ -24,92 +24,6 @@ logger = logging.getLogger(__name__)
 BASE_DIR = ROOT_DIR
 IF_FROZEN = getattr(sys, 'frozen', False)
 
-# --- WAFERPULSE MES PHYSICS ENGINE INTEGRATION ---
-FACTORY_MES_DATABASE = {
-    "WAF-AUTO-001": { 
-        "customer": "Automotive Controller",
-        "phi": 0.85,             
-        "A_constant": 2.6e-8,   
-        "n_exp": 2.0,
-        "base_temp_K": 398.15,   
-        "baseline_J": 1500000,   
-        "spc_golden_years": 15.0 
-    },
-    "WAF-CONS-002": { 
-        "customer": "Consumer USB Drive",
-        "phi": 0.75,             
-        "A_constant": 2.5e-8,
-        "n_exp": 2.0,
-        "base_temp_K": 358.15,   
-        "baseline_J": 1000000,   
-        "spc_golden_years": 5.0  
-    }
-}
-
-def calculate_production_mttf(measured_void_percent, wafer_id, distance_from_center_mm, probe_hits=0):
-    """
-    Calculates MTTF using full 300mm Wafer Physics (Edge Exclusion, Scrub Marks, Lot Drift)
-    """
-    recipe = FACTORY_MES_DATABASE["WAF-CONS-002"]
-    wafer_id_str = str(wafer_id).upper()
-    for key in FACTORY_MES_DATABASE:
-        if key in wafer_id_str:
-            recipe = FACTORY_MES_DATABASE[key]
-            break
-    else:
-        if "AUTO" in wafer_id_str:
-            recipe = FACTORY_MES_DATABASE["WAF-AUTO-001"]
-
-    k = 8.617e-5  
-    
-    # 2. Batch Effect (Lot-to-Lot Drift)
-    random.seed(hash(wafer_id))
-    lot_drift_multiplier = random.gauss(1.0, 0.02) 
-    drifted_A_constant = recipe["A_constant"] * lot_drift_multiplier
-
-    # 3. Probe Needle Age & Scrub Mark Damage
-    measurement_noise = 0.05 * (probe_hits / 50000.0) 
-    physical_damage_offset = 5.0 
-    true_void_percent = max(0.1, measured_void_percent + physical_damage_offset - measurement_noise)
-
-    # 4. Radial Variation (Center-to-Edge Stress)
-    radial_stress_multiplier = 1.0 + (0.25 * (distance_from_center_mm / 150.0)**2)
-    effective_area = 1.0 - (min(true_void_percent, 99.0) / 100.0)
-    J_base = (recipe["baseline_J"] * radial_stress_multiplier) / effective_area
-
-    # Non-Linear Current Crowding
-    if true_void_percent > 40.0:
-        crowding_factor = math.exp((true_void_percent - 40.0) / 10.0)
-        J = J_base * crowding_factor
-    else:
-        J = J_base
-
-    # Thermal Runaway Feedback Loop
-    joule_heating_spike_1 = (true_void_percent * 2.5) 
-    T1 = recipe["base_temp_K"] + joule_heating_spike_1
-    thermal_feedback = (T1 - recipe["base_temp_K"]) * 0.15 
-    T_final = T1 + thermal_feedback
-
-    # Final Black's Equation
-    try:
-        mttf_hours = (1/drifted_A_constant) * (J**-recipe["n_exp"]) * math.exp(recipe["phi"] / (k * T_final))
-        mttf_years = round(mttf_hours / 8760.0, 2)
-        # Establish a minimum floor of 1.5 years for low-yield wafers
-        mttf_years = max(mttf_years, 1.5)
-    except OverflowError:
-        mttf_years = 999.0
-
-    # DYNAMIC SPC BINNING
-    if mttf_years >= recipe["spc_golden_years"]:
-        status = f"GOLDEN ({recipe['customer']})"
-    elif mttf_years >= (recipe["spc_golden_years"] / 2):
-        status = f"MARGINAL (Downgrade)"
-    else:
-        status = "SCRAP (Critical Risk)"
-
-    random.seed() 
-    return mttf_years, status
-
 
 class YieldPredictor:
     """Manages the end-to-end yield prediction pipeline from raw STDF/CSV data."""
@@ -443,39 +357,15 @@ class YieldPredictor:
                     pred_yield = float(val_raw[targets_schema.index("FT_y")] if isinstance(val_raw, (np.ndarray, list)) and "FT_y" in targets_schema else (val_raw[0] if isinstance(val_raw, (np.ndarray, list)) else val_raw))
                     pred_yield_pct = pred_yield if pred_yield > 1.0 else pred_yield * 100.0
                     pred_yield_pct = np.clip(pred_yield_pct, 0.0, 100.0)
-                    measured_void_percent = 100.0 - pred_yield_pct
-
-                    # WaferPulse Intelligence (Mock Digital Twin Integration)
-                    import random
-                    die_seed = int(hash(m_name) % 1000000)
-                    random.seed(die_seed)
-                    
-                    mock_radius = random.uniform(5, 149) # Simulated die position
-                    mock_probe_hits = random.randint(1, 4) # Simulated probe mark stress
-                    
-                    mttf_years, spc_status = calculate_production_mttf(
-                        measured_void_percent, 
-                        p_path.name, # Use filename as proxy for wafer_id
-                        mock_radius, 
-                        mock_probe_hits
-                    )
-                    
-                    # Augment results
+                    # Augment results with yield percentage
                     if isinstance(preds[m_name], dict):
                         preds[m_name].update({
-                            "WP_Radius_mm": mock_radius,
-                            "WP_Probe_Hits": mock_probe_hits,
-                            "WP_MTTF_Years": mttf_years,
-                            "WP_Factory_Status": spc_status
+                            "predicted_yield_pct": pred_yield_pct,
                         })
                     else:
-                        # Convert to dict if it was a scalar
                         preds[m_name] = {
                             "y": preds[m_name],
-                            "WP_Radius_mm": mock_radius,
-                            "WP_Probe_Hits": mock_probe_hits,
-                            "WP_MTTF_Years": mttf_years,
-                            "WP_Factory_Status": spc_status
+                            "predicted_yield_pct": pred_yield_pct,
                         }
                     
                     # Explainability (SHAP)
