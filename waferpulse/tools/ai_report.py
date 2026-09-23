@@ -41,6 +41,12 @@ def generate_shift_handover_note(
     seamlessly falls back to an expert deterministic fab engineering template.
     """
     effective_key = api_key or os.environ.get("GROQ_API_KEY", "").strip()
+    if not effective_key:
+        try:
+            import streamlit as st
+            effective_key = str(st.secrets.get("GROQ_API_KEY", "")).strip()
+        except Exception:
+            pass
     
     # Calculate yield metrics
     yield_pct = predicted_yield * 100.0 if predicted_yield <= 1.0 else predicted_yield
