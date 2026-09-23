@@ -447,7 +447,7 @@ class YieldPredictor:
                                 "feature_names": list(X_aligned.columns)
                             }
                         except Exception as e:
-                            self.log_func(f"[WARN] SHAP prediction error for {m_name}: {e}")
+                            logger.debug("SHAP explanation not available for %s: %s", m_name, e)
                             
                 except Exception as e:
                     self.log_func(f"[WARN] Inference {m_path.name} failed: {e}")

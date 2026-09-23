@@ -1323,31 +1323,39 @@ def get_historical_inventory(generic: str):
             if family_dir.is_dir():
                 for generic_dir in family_dir.iterdir():
                     if generic_dir.is_dir() and (generic_dir.name == generic or generic_dir.name.startswith(generic + "_")):
+                        # 1. Check T&P_Decrypted if present
                         tp_dir = generic_dir / "T&P_Decrypted"
                         if tp_dir.exists():
                             for root, _, files in os.walk(tp_dir):
                                 for f in files:
                                     if f.lower().endswith(".csv") and not f.lower().endswith("_limits.csv"):
                                         p = Path(root) / f
-                                        if p.stat().st_size > 10240:
+                                        if p.stat().st_size > 10240 and p not in hist_files:
                                             hist_files.append(p)
+                        # 2. Check generic_dir directly for demo showcase files (e.g. SYN_0053_...89.78%.std_1.csv)
+                        for f in generic_dir.glob("*.csv"):
+                            if not f.name.lower().endswith("_limits.csv") and not f.name.startswith("merged_features"):
+                                if f.stat().st_size > 10240 and f not in hist_files:
+                                    hist_files.append(f)
                                             
     # 3. Parse Metadata
     for hf in hist_files:
-        # Extract yield and Lot ID from folder name
-        # Folder is .../T&P_Decrypted/LOTNAME_[01-02]_92%/...
-        # Or parent is the combo folder
         combo_folder = hf.parent.name
-        parts = combo_folder.split('_')
-        lot_id_raw = f"{parts[0]}_{parts[1]}" if len(parts) >= 2 and parts[0] == "SYN" else parts[0]
-        norm_lot = normalize_lot_id(lot_id_raw)
-        
-        # Extract yield
+        # Extract yield from combo_folder or filename
         yield_val = 0.0
-        if '%' in combo_folder:
-            match = re.search(r'_(\d+(?:\.\d+)?)\s*%', combo_folder)
-            if match:
-                yield_val = float(match.group(1))
+        text_to_search = f"{combo_folder} {hf.name}"
+        match = re.search(r'(\d+(?:\.\d+)?)\s*%', text_to_search)
+        if match:
+            yield_val = float(match.group(1))
+
+        # Extract lot id
+        m_lot = re.search(r'(SYN_\d+)', hf.name)
+        if m_lot:
+            lot_id_raw = m_lot.group(1)
+        else:
+            parts = combo_folder.split('_')
+            lot_id_raw = f"{parts[0]}_{parts[1]}" if len(parts) >= 2 and parts[0] == "SYN" else parts[0]
+        norm_lot = normalize_lot_id(lot_id_raw)
         
         # Filter: only good yield > 80
         if yield_val < 80:
@@ -3403,9 +3411,11 @@ elif app_mode == "Wafer Analytics & Prediction":
                                 X_bg = X_bg[valid_mask].fillna(0)
                                 y_bg = y_bg[valid_mask]
                                 
-                                with st.spinner("Computing Permutation Importance..."):
+                                with st.spinner("Computing feature importance impact..."):
+                                    X_sub = X_bg.head(20)
+                                    y_sub = y_bg.head(20)
                                     perm_result = permutation_importance(
-                                        pipe, X_bg, y_bg, n_repeats=10, random_state=42, n_jobs=1
+                                        pipe, X_sub, y_sub, n_repeats=2, random_state=42, n_jobs=1
                                     )
                                 
                                 imp_df = pd.DataFrame({
