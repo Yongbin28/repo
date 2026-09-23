@@ -534,26 +534,48 @@ def discover_dataset_products(dataset_root: Path = DATASET_ROOT) -> list:
 
         # Collect available lot / wafer files
         sample_files = []
+        seen_lots = set()
 
         # 1. Direct CSV/STDF files in the product directory
-        for f in sorted(prod_dir.glob("*.csv")):
-            if not f.name.endswith("_limits.csv") and not f.name.startswith("limit"):
-                m_yd = re.search(r"(\d+\.?\d*)%", f.name)
-                yd_str = f" [Yield: {m_yd.group(1)}%]" if m_yd else ""
-                m_lot = re.search(r"(SYN_\d+)", f.name)
-                lot_str = m_lot.group(1) if m_lot else f.stem[:15]
-                sample_files.append({
-                    "path": f,
-                    "name": f.name,
-                    "lot_id": lot_str,
-                    "label": f"Sample: {lot_str}{yd_str} ({f.name})"
-                })
-
-        for f in sorted(prod_dir.glob("*.stdf")):
+        csv_candidates = [
+            f for f in sorted(prod_dir.glob("*.csv"))
+            if not f.name.lower().endswith("_limits.csv")
+            and not f.name.lower().startswith("limit")
+            and not f.name.lower().startswith("merged_features")
+        ]
+        
+        has_probe_csv = any("_PRB_" in f.name.upper() for f in csv_candidates)
+        for f in csv_candidates:
+            # Wafer Analytics operates on wafer Probe (PRB/Sort) files; skip packaging Final Test (FIN)
+            if has_probe_csv and ("_FIN_" in f.name.upper() or "FINAL" in f.name.upper() or "FT_" in f.name.upper()):
+                continue
+            
+            m_yd = re.search(r"(\d+\.?\d*)%", f.name)
+            yd_str = f" [Yield: {m_yd.group(1)}%]" if m_yd else ""
+            m_lot = re.search(r"(SYN_\d+)", f.name)
+            lot_str = m_lot.group(1) if m_lot else f.stem[:15]
+            
+            if lot_str in seen_lots:
+                continue
+            seen_lots.add(lot_str)
+            
             sample_files.append({
                 "path": f,
                 "name": f.name,
-                "lot_id": f.stem,
+                "lot_id": lot_str,
+                "label": f"Sample: {lot_str}{yd_str} ({f.name})"
+            })
+
+        for f in sorted(prod_dir.glob("*.stdf")):
+            m_lot = re.search(r"(SYN_\d+)", f.name)
+            lot_str = m_lot.group(1) if m_lot else f.stem[:15]
+            if lot_str in seen_lots:
+                continue
+            seen_lots.add(lot_str)
+            sample_files.append({
+                "path": f,
+                "name": f.name,
+                "lot_id": lot_str,
                 "label": f"STDF Sample: {f.name}"
             })
 
@@ -568,6 +590,9 @@ def discover_dataset_products(dataset_root: Path = DATASET_ROOT) -> list:
                         yd_str = f" [Yield: {m_yd.group(1)}%]" if m_yd else ""
                         m_lot = re.search(r"(SYN_\d+)", lot_dir.name)
                         lot_str = m_lot.group(1) if m_lot else lot_dir.name[:15]
+                        if lot_str in seen_lots:
+                            continue
+                        seen_lots.add(lot_str)
                         sample_files.append({
                             "path": csvs[0],
                             "name": csvs[0].name,

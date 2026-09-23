@@ -2455,7 +2455,13 @@ elif app_mode == "Wafer Analytics & Prediction":
         p_partname = selected_prod["partname"]
 
         # 2. Lot / Wafer File Selector
-        lot_files = selected_prod.get("files", [])
+        raw_lot_files = selected_prod.get("files", [])
+        seen_opt = set()
+        lot_files = []
+        for f in raw_lot_files:
+            if f["label"] not in seen_opt:
+                seen_opt.add(f["label"])
+                lot_files.append(f)
         file_options = [f["label"] for f in lot_files] + ["📂 Upload Custom DLog File..."]
         
         sel_file_choice = st.sidebar.selectbox(
