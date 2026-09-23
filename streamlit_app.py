@@ -4122,13 +4122,15 @@ elif app_mode == "Wafer Analytics & Prediction":
 
         st.markdown("---")
         st.subheader("4) 🤖 AI Fab Engineering Shift Handover Note")
-        st.caption("Powered by Groq Cloud (Llama 3.1 8B Instant) with automated deterministic fab rule fallback.")
+        st.caption("Powered by Groq Cloud (Ultra-Fast Fab Intelligence) with automated deterministic rule fallback.")
 
-        with st.expander("⚙️ Optional Groq API Configuration", expanded=False):
+        from waferpulse.tools.ai_report import DEFAULT_GROQ_API_KEY
+        with st.expander("⚙️ Groq API Configuration (Pre-configured & Saved)", expanded=False):
             groq_key_input = st.text_input(
-                "Groq Cloud API Key (Optional)",
+                "Groq Cloud API Key",
+                value=DEFAULT_GROQ_API_KEY,
                 type="password",
-                help="Get a free ultra-fast API key at https://console.groq.com. If left blank, the deterministic fab rule engine will be used automatically.",
+                help="Permanently saved and ready for instant execution. You can also override with your custom key if desired.",
                 key="groq_api_key_input"
             )
 
