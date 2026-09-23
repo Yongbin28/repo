@@ -1377,9 +1377,15 @@ def get_historical_inventory(generic: str):
             "mtime": hf.stat().st_mtime
         })
         
-    # Sort by recent
-    inventory.sort(key=lambda x: x["mtime"], reverse=True)
-    return inventory
+    # Deduplicate by norm_lot, keeping the highest yield record
+    inventory.sort(key=lambda x: (x["yield"], x["mtime"]), reverse=True)
+    seen_lots = set()
+    dedup_inventory = []
+    for item in inventory:
+        if item["norm_lot"] not in seen_lots:
+            seen_lots.add(item["norm_lot"])
+            dedup_inventory.append(item)
+    return dedup_inventory
 
 def _calculate_psi(expected, actual, bins=10):
     try:
@@ -1795,13 +1801,19 @@ def get_real_distribution_data(generic: str, limit_map: dict, curr_df: pd.DataFr
             ndf = ndf.rename(columns=rename_map)
             # Tag with Lot ID and Yield for multi-trace support
             combo_folder = hf.parent.name
-            parts = combo_folder.split('_')
-            lot_id_short = f"{parts[0]}_{parts[1]}" if len(parts) >= 2 and parts[0] == "SYN" else parts[0]
-            yield_match = re.search(r'_(\d+(?:\.\d+)?)\s*%', combo_folder)
+            text_to_search = f"{combo_folder} {hf.name}"
+            m_lot = re.search(r'(SYN_\d+)', text_to_search)
+            if m_lot:
+                lot_id_short = m_lot.group(1)
+            else:
+                parts = combo_folder.split('_')
+                lot_id_short = f"{parts[0]}_{parts[1]}" if len(parts) >= 2 and parts[0] == "SYN" else parts[0]
+            
+            yield_match = re.search(r'(\d+(?:\.\d+)?)\s*%', text_to_search)
             yield_str = yield_match.group(1) if yield_match else "0"
             
             # Use unique label for trace separation: Lot + Yield
-            unique_label = f"{lot_id_short} ({yield_str}%)"
+            unique_label = f"{lot_id_short} ({float(yield_str):.1f}%)" if yield_str != "0" else lot_id_short
             ndf["_LOT_ID_LABEL"] = unique_label
             ndf["_LOT_ID"] = lot_id_short
             ndf["_YIELD"] = yield_str
@@ -2783,8 +2795,8 @@ elif app_mode == "Wafer Analytics & Prediction":
                           
                           lot_options = {f"{i['lot_id']} ({i['year']}, {i['yield']:.1f}%)": i['path'] for i in filtered_inv_sorted}
                           with colf2:
-                              default_lots = list(lot_options.keys())[:3]
-                              sel_lot_labels = st.multiselect("Select Lot IDs (Max 3) for comparison", options=list(lot_options.keys()), default=default_lots, max_selections=3)
+                              default_lots = list(lot_options.keys())[:5]
+                              sel_lot_labels = st.multiselect("Select Lot IDs for comparison (Top 5 Golden Lots Recommended)", options=list(lot_options.keys()), default=default_lots, max_selections=10)
                           
                           selected_paths = [lot_options[l] for l in sel_lot_labels]
                      
@@ -2817,6 +2829,7 @@ elif app_mode == "Wafer Analytics & Prediction":
                               # Render detailed analysis in first tab (tab_detail)
                               with tab_detail:
                                   st.subheader("📊 Detail Component Analysis")
+                                  st.caption(f"🔬 **Multi-Lot Baseline Comparison**: Comparing Current Lot **{p_lot_id}** against **{len(selected_paths)} Golden Baseline Lots** ({', '.join([l.split(' ')[0] for l in sel_lot_labels])}). *(Use 'Historical Comparison Filters' tab to adjust lots or fiscal years)*")
                                   
                                   TEST_LIST = list(curr_df.columns)
                                   TEST_LIST.sort(key=lambda x: (
@@ -2912,15 +2925,18 @@ elif app_mode == "Wafer Analytics & Prediction":
                                        def build_dist_fig(filtered=False):
                                           fig_dist = go.Figure()
                                           if not hist_df.empty:
-                                              colors = ["#9aa0a6", "#17a2b8", "#6f42c1", "#fd7e14", "#20c997"]
+                                              colors = ["#2b6cb0", "#2c7a7b", "#d69e2e", "#6f42c1", "#319795", "#fd7e14", "#718096"]
                                               for idx, lbl in enumerate(hist_df["_LOT_ID_LABEL"].unique()):
                                                   lot_data = hist_df[hist_df["_LOT_ID_LABEL"] == lbl][sel_test].dropna()
                                                   if filtered: lot_data = lot_data[(lot_data >= q_low) & (lot_data <= q_high)]
-                                                  if not lot_data.empty: fig_dist.add_trace(go.Histogram(x=lot_data, name=f"Hist Lot: {lbl}", opacity=0.4, marker_color=colors[idx % len(colors)], histnorm='probability density'))
+                                                  if not lot_data.empty: fig_dist.add_trace(go.Histogram(x=lot_data, name=f"Golden: {lbl}", opacity=0.35, marker_color=colors[idx % len(colors)], histnorm='probability density'))
                                           if not curr_df.empty and sel_test in curr_df.columns:
                                               cd_data = curr_df[sel_test].dropna()
                                               if filtered: cd_data = cd_data[(cd_data >= q_low) & (cd_data <= q_high)]
-                                              if not cd_data.empty: fig_dist.add_trace(go.Histogram(x=cd_data, name=f"Current Lot ({p_lot_id})", opacity=0.75, marker_color="#Eb5757", histnorm='probability density'))
+                                              curr_lbl = f"Current Lot: {p_lot_id}"
+                                              if 'pred' in locals() and pd.notna(pred):
+                                                  curr_lbl += f" ({pred*100:.1f}%)"
+                                              if not cd_data.empty: fig_dist.add_trace(go.Histogram(x=cd_data, name=curr_lbl, opacity=0.75, marker_color="#Eb5757", histnorm='probability density'))
                                           if not filtered:
                                               l_row = limits_df[limits_df["Test"] == sel_test]
                                               if not l_row.empty:
