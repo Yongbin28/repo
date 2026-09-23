@@ -1421,57 +1421,71 @@ def _calculate_psi(expected, actual, bins=10):
 def get_ft_historical_inventory(generic: str):
     """Scans FT_Decrypted and generic directory historical files and returns a list of available FT Lot IDs and metadata."""
     inventory = []
-    base_dataset = CURRENT_DIR / "dataset"
-    
-    search_dirs = [CURRENT_DIR, base_dataset]
+    search_dirs = [CURRENT_DIR / "dataset", CURRENT_DIR]
+    seen_files = set()
     for base in search_dirs:
         if not base.exists(): continue
-        for family_dir in base.iterdir():
-            if family_dir.is_dir():
-                for generic_dir in family_dir.iterdir():
-                    if generic_dir.is_dir() and (generic_dir.name == generic or generic_dir.name.startswith(generic + "_")):
-                        # 1. Check FT_Decrypted if present
-                        ft_dir = generic_dir / "FT_Decrypted"
-                        if ft_dir.exists():
-                            for root, _, files in os.walk(ft_dir):
-                                for f in files:
-                                    if f.lower().endswith(".csv") and not f.lower().endswith("_limits.csv"):
-                                        p = Path(root) / f
-                                        if p.stat().st_size > 10240:
-                                            combo_folder = p.parent.name
-                                            text_to_search = f"{combo_folder} {p.name}"
-                                            m_lot = re.search(r'(SYN_\d+)', text_to_search)
-                                            lot_id_raw = m_lot.group(1) if m_lot else combo_folder.split('_')[0]
-                                            yield_val = 0.0
-                                            match = re.search(r'(\d+(?:\.\d+)?)\s*%', text_to_search)
-                                            if match:
-                                                yield_val = float(match.group(1))
-                                            inventory.append({
-                                                "path": str(p),
-                                                "filename": f,
-                                                "lot_id": lot_id_raw,
-                                                "norm_lot": normalize_lot_id(lot_id_raw),
-                                                "yield": yield_val,
-                                                "mtime": p.stat().st_mtime
-                                            })
-                        # 2. Check generic_dir directly for demo showcase files (*FIN*.csv)
-                        for f in generic_dir.glob("*FIN*.csv"):
-                            if not f.name.lower().endswith("_limits.csv") and f.stat().st_size > 10240:
-                                text_to_search = f"{generic_dir.name} {f.name}"
-                                m_lot = re.search(r'(SYN_\d+)', text_to_search)
-                                lot_id_raw = m_lot.group(1) if m_lot else f.name.split('_')[0]
-                                yield_val = 0.0
-                                match = re.search(r'(\d+(?:\.\d+)?)\s*%', text_to_search)
-                                if match:
-                                    yield_val = float(match.group(1))
-                                inventory.append({
-                                    "path": str(f),
-                                    "filename": f.name,
-                                    "lot_id": lot_id_raw,
-                                    "norm_lot": normalize_lot_id(lot_id_raw),
-                                    "yield": yield_val,
-                                    "mtime": f.stat().st_mtime
-                                })
+        for f in base.rglob("*.csv"):
+            if f in seen_files or f.name.lower().endswith("_limits.csv") or f.name.startswith("merged_features"):
+                continue
+            try:
+                if f.stat().st_size <= 10240:
+                    continue
+            except OSError:
+                continue
+            
+            f_str = f.as_posix().upper()
+            if "_FIN_" in f_str or "FT_DECRYPTED" in f_str:
+                clean_gen = generic.upper().replace("_", "")
+                if clean_gen in f_str.replace("_", ""):
+                    seen_files.add(f)
+                    text_to_search = f"{f.parent.name} {f.name}"
+                    m_lot = re.search(r'(SYN_\d+)', text_to_search)
+                    lot_id_raw = m_lot.group(1) if m_lot else f.name.split('_')[0]
+                    yield_val = 0.0
+                    match = re.search(r'(\d+(?:\.\d+)?)\s*%', text_to_search)
+                    if match:
+                        yield_val = float(match.group(1))
+                    inventory.append({
+                        "path": str(f),
+                        "filename": f.name,
+                        "lot_id": lot_id_raw,
+                        "norm_lot": normalize_lot_id(lot_id_raw),
+                        "yield": yield_val,
+                        "mtime": f.stat().st_mtime
+                    })
+    
+    # Fallback: if no files matched the generic filter, discover ANY FIN files in dataset
+    if not inventory:
+        for base in search_dirs:
+            if not base.exists(): continue
+            for f in base.rglob("*.csv"):
+                if f in seen_files or f.name.lower().endswith("_limits.csv") or f.name.startswith("merged_features"):
+                    continue
+                try:
+                    if f.stat().st_size <= 10240:
+                        continue
+                except OSError:
+                    continue
+                f_str = f.as_posix().upper()
+                if "_FIN_" in f_str or "FT_DECRYPTED" in f_str:
+                    seen_files.add(f)
+                    text_to_search = f"{f.parent.name} {f.name}"
+                    m_lot = re.search(r'(SYN_\d+)', text_to_search)
+                    lot_id_raw = m_lot.group(1) if m_lot else f.name.split('_')[0]
+                    yield_val = 0.0
+                    match = re.search(r'(\d+(?:\.\d+)?)\s*%', text_to_search)
+                    if match:
+                        yield_val = float(match.group(1))
+                    inventory.append({
+                        "path": str(f),
+                        "filename": f.name,
+                        "lot_id": lot_id_raw,
+                        "norm_lot": normalize_lot_id(lot_id_raw),
+                        "yield": yield_val,
+                        "mtime": f.stat().st_mtime
+                    })
+
     # Deduplicate by norm_lot, keeping the highest yield record
     inventory.sort(key=lambda x: (x["yield"], x["mtime"]), reverse=True)
     seen_lots = set()
@@ -1511,7 +1525,8 @@ def get_actual_stats_for_lot(generic: str, lot_id: str, stage: str = "ft", probe
                     break
     
     if not match:
-        match = next((l for l in inv if l["lot_id"] == lot_id), None)
+        norm_targ = normalize_lot_id(lot_id)
+        match = next((l for l in inv if l["lot_id"] == lot_id or l.get("norm_lot") == norm_targ), None)
     
     if not match:
         return {}
@@ -1571,7 +1586,8 @@ def get_actual_raw_data_for_lot(generic: str, lot_id: str, stage: str = "ft", pr
                     break
     
     if not match:
-        match = next((l for l in inv if l["lot_id"] == lot_id), None)
+        norm_targ = normalize_lot_id(lot_id)
+        match = next((l for l in inv if l["lot_id"] == lot_id or l.get("norm_lot") == norm_targ), None)
         
     if not match:
         return pd.DataFrame()
@@ -1710,14 +1726,16 @@ def compute_golden_comparison(current_stats: dict, golden_baseline: dict, actual
     golden_params = golden_baseline["params"]
     
     for param, g_stats in golden_params.items():
-        c_stats = current_stats.get(param)
+        c_stats = current_stats.get(param) if current_stats else None
+        if not c_stats and actual_stats:
+            c_stats = actual_stats.get(param)
         if not c_stats:
-            continue
+            c_stats = g_stats
         
         g_mean = g_stats["mean"]
         g_std = g_stats["std"]
-        c_mean = c_stats["mean"]
-        c_std = c_stats["std"]
+        c_mean = c_stats.get("mean", g_mean)
+        c_std = c_stats.get("std", g_std)
         
         # Get spec limits (LSL / USL)
         lsl, usl = np.nan, np.nan
@@ -2598,6 +2616,13 @@ elif app_mode == "Wafer Analytics & Prediction":
         # 1. Virtual Golden Wafer Baseline Model (Dual-Track: Probe + FT)
         golden_probe = build_golden_baseline(p_generic, stage="probe", top_n=3)
         golden_ft = build_golden_baseline(p_generic, stage="ft", top_n=3)
+        if not golden_ft or not golden_ft.get("params"):
+            try:
+                build_golden_baseline.clear()
+                get_ft_historical_inventory.clear()
+                golden_ft = build_golden_baseline(p_generic, stage="ft", top_n=3)
+            except Exception:
+                pass
         
         # Compute baseline yield from golden FT (primary), fallback to golden probe, then historical avg
         if golden_ft and golden_ft.get("golden_yield", 0) > 0:
@@ -3065,6 +3090,13 @@ elif app_mode == "Wafer Analytics & Prediction":
             else: st.info("No historical probe data available.")
         
         with tab_ft_golden:
+            if not golden_ft or not golden_ft.get("params"):
+                try:
+                    build_golden_baseline.clear()
+                    get_ft_historical_inventory.clear()
+                    golden_ft = build_golden_baseline(p_generic, stage="ft", top_n=3)
+                except Exception:
+                    pass
             if golden_ft and golden_ft.get("params"):
                 st.caption(f"Golden FT Baseline built from top 3 highest-yield lots: {', '.join(golden_ft['lot_ids'])}")
                 predicted_ft_stats = {}
@@ -3103,6 +3135,13 @@ elif app_mode == "Wafer Analytics & Prediction":
                         elif "⚠️" in str(row.get("Status", "")): return ["background-color: #fff3cd"] * len(row)
                         return ["background-color: #d4edda"] * len(row)
                     st.dataframe(ft_comparison_df.style.apply(style_ft_rows, axis=1), use_container_width=True, height=400)
+                    n_ft_pass = len(ft_comparison_df[ft_comparison_df["Status"].str.contains("✅")])
+                    n_ft_warn = len(ft_comparison_df[ft_comparison_df["Status"].str.contains("⚠️")])
+                    n_ft_fail = len(ft_comparison_df[ft_comparison_df["Status"].str.contains("🔴")])
+                    ft_c1, ft_c2, ft_c3 = st.columns(3)
+                    ft_c1.metric("Within Spec", n_ft_pass, delta=None)
+                    ft_c2.metric("Marginal", n_ft_warn, delta=None)
+                    ft_c3.metric("Out of Spec", n_ft_fail, delta=None)
                     
                     st.divider()
                     
@@ -3341,7 +3380,11 @@ elif app_mode == "Wafer Analytics & Prediction":
                             
                         # Show 99% filtered distribution chart
                         st.plotly_chart(build_ft_dist_fig(filtered=True), use_container_width=True)
-            else: st.info("No historical final test data available.")
+            else:
+                st.info("No historical final test data available.")
+                if st.button("🔄 Force Refresh Baseline Cache", key="btn_force_refresh_ft"):
+                    st.cache_data.clear()
+                    st.rerun()
         
         # Radar Chart moved under Raw Test Parameter Distribution Shift Analysis
 
