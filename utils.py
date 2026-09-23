@@ -590,3 +590,37 @@ def discover_dataset_products(dataset_root: Path = DATASET_ROOT) -> list:
             })
 
     return products
+
+
+def patch_sklearn_estimator(est: Any) -> None:
+    """Ensure cross-version compatibility for pickled scikit-learn estimators across environments."""
+    if est is None:
+        return
+    if hasattr(est, "steps"):
+        for _, step in est.steps:
+            patch_sklearn_estimator(step)
+    if hasattr(est, "named_steps"):
+        for _, step in est.named_steps.items():
+            patch_sklearn_estimator(step)
+    if hasattr(est, "estimators_"):
+        for sub_est in est.estimators_:
+            patch_sklearn_estimator(sub_est)
+    if hasattr(est, "estimator"):
+        patch_sklearn_estimator(est.estimator)
+    if hasattr(est, "indicator_") and est.indicator_ is not None:
+        patch_sklearn_estimator(est.indicator_)
+
+    cls_name = est.__class__.__name__
+    if cls_name == "SimpleImputer":
+        dtype = getattr(est, "_fit_dtype", None)
+        if dtype is None:
+            stats = getattr(est, "statistics_", None)
+            dtype = stats.dtype if stats is not None and hasattr(stats, "dtype") else np.dtype("float64")
+        if not hasattr(est, "_fill_dtype"):
+            est._fill_dtype = dtype
+        if not hasattr(est, "_fit_dtype"):
+            est._fit_dtype = dtype
+    elif cls_name == "MissingIndicator":
+        if not hasattr(est, "_fit_dtype"):
+            est._fit_dtype = np.dtype("float64")
+

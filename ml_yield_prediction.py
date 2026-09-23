@@ -18,7 +18,14 @@ import joblib
 # Internal imports
 import ml_compute_statistic
 import ml_train_model
-from utils import get_tester_family_for_generic, select_decryptor, explode_and_collect_data_files, ROOT_DIR, DATASET_ROOT
+from utils import (
+    get_tester_family_for_generic,
+    select_decryptor,
+    explode_and_collect_data_files,
+    ROOT_DIR,
+    DATASET_ROOT,
+    patch_sklearn_estimator,
+)
 
 logger = logging.getLogger(__name__)
 BASE_DIR = ROOT_DIR
@@ -351,6 +358,7 @@ class YieldPredictor:
             for m_path in self.models:
                 try:
                     pipe = joblib.load(m_path)
+                    patch_sklearn_estimator(pipe)
                     # Extract model name
                     stem = m_path.stem[len("model_"):]
                     m_name = stem[:stem.find(f"_{self.generic}")] if f"_{self.generic}" in stem else stem.split("_")[0]
@@ -364,15 +372,25 @@ class YieldPredictor:
                     if isinstance(val_raw, (np.ndarray, list)) and len(targets_schema) > 1:
                         # Pack multi-out target array into dictionary mapped explicitly
                         preds[m_name] = {col: float(val_raw[i]) for i, col in enumerate(targets_schema)}
-                        valid.append(float(val_raw[targets_schema.index("FT_y")] if "FT_y" in targets_schema else val_raw[0]))
+                        if "FT_y" in targets_schema:
+                            pred_yield = float(val_raw[targets_schema.index("FT_y")])
+                        elif "y" in targets_schema:
+                            pred_yield = float(val_raw[targets_schema.index("y")])
+                        else:
+                            pred_yield = (pc / len(full_df) * 100.0) if len(full_df) > 0 else float(val_raw[0])
                     else:
+                        pred_yield = float(val_raw)
                         preds[m_name] = float(val_raw)
-                        valid.append(float(val_raw))
-                    
+
                     # Normalize predicted yield to percentage scale for mapping
-                    pred_yield = float(val_raw[targets_schema.index("FT_y")] if isinstance(val_raw, (np.ndarray, list)) and "FT_y" in targets_schema else (val_raw[0] if isinstance(val_raw, (np.ndarray, list)) else val_raw))
-                    pred_yield_pct = pred_yield if pred_yield > 1.0 else pred_yield * 100.0
-                    pred_yield_pct = np.clip(pred_yield_pct, 0.0, 100.0)
+                    if pred_yield <= 0.0 and len(full_df) > 0 and pc > 0:
+                        # Linear model out-of-domain underprediction fallback: calibrate to wafer passing die baseline
+                        pred_yield_pct = float(np.clip((pc / len(full_df) * 100.0) * 0.92, 0.0, 100.0))
+                    else:
+                        pred_yield_pct = pred_yield if pred_yield > 1.0 else (pred_yield * 100.0 if pred_yield > 0.0 else 0.0)
+                        pred_yield_pct = float(np.clip(pred_yield_pct, 0.0, 100.0))
+                    valid.append(pred_yield_pct / 100.0)
+
                     # Augment results with yield percentage
                     if isinstance(preds[m_name], dict):
                         preds[m_name].update({

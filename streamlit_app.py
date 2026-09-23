@@ -3375,6 +3375,8 @@ elif app_mode == "Wafer Analytics & Prediction":
                         
                         if model_files and ref_path.exists():
                             pipe = joblib.load(model_files[0])
+                            from utils import patch_sklearn_estimator
+                            patch_sklearn_estimator(pipe)
                             m_name = model_files[0].stem.replace("model_", "").replace(f"_{p_generic}", "")
                             
                             bg_df = pd.read_csv(ref_path)
