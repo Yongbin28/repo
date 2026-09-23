@@ -1419,7 +1419,7 @@ def _calculate_psi(expected, actual, bins=10):
 
 @st.cache_data(show_spinner=False)
 def get_ft_historical_inventory(generic: str):
-    """Scans FT_Decrypted historical files and returns a list of available FT Lot IDs and metadata."""
+    """Scans FT_Decrypted and generic directory historical files and returns a list of available FT Lot IDs and metadata."""
     inventory = []
     base_dataset = CURRENT_DIR / "dataset"
     
@@ -1430,6 +1430,7 @@ def get_ft_historical_inventory(generic: str):
             if family_dir.is_dir():
                 for generic_dir in family_dir.iterdir():
                     if generic_dir.is_dir() and (generic_dir.name == generic or generic_dir.name.startswith(generic + "_")):
+                        # 1. Check FT_Decrypted if present
                         ft_dir = generic_dir / "FT_Decrypted"
                         if ft_dir.exists():
                             for root, _, files in os.walk(ft_dir):
@@ -1438,22 +1439,48 @@ def get_ft_historical_inventory(generic: str):
                                         p = Path(root) / f
                                         if p.stat().st_size > 10240:
                                             combo_folder = p.parent.name
-                                            parts = combo_folder.split('_')
-                                            lot_id_raw = f"{parts[0]}_{parts[1]}" if len(parts) >= 2 and parts[0] == "SYN" else parts[0]
+                                            text_to_search = f"{combo_folder} {p.name}"
+                                            m_lot = re.search(r'(SYN_\d+)', text_to_search)
+                                            lot_id_raw = m_lot.group(1) if m_lot else combo_folder.split('_')[0]
                                             yield_val = 0.0
-                                            if '%' in combo_folder:
-                                                match = re.search(r'_(\d+(?:\.\d+)?)\s*%', combo_folder)
-                                                if match:
-                                                    yield_val = float(match.group(1))
+                                            match = re.search(r'(\d+(?:\.\d+)?)\s*%', text_to_search)
+                                            if match:
+                                                yield_val = float(match.group(1))
                                             inventory.append({
                                                 "path": str(p),
                                                 "filename": f,
                                                 "lot_id": lot_id_raw,
+                                                "norm_lot": normalize_lot_id(lot_id_raw),
                                                 "yield": yield_val,
                                                 "mtime": p.stat().st_mtime
                                             })
-    inventory.sort(key=lambda x: x["yield"], reverse=True)
-    return inventory
+                        # 2. Check generic_dir directly for demo showcase files (*FIN*.csv)
+                        for f in generic_dir.glob("*FIN*.csv"):
+                            if not f.name.lower().endswith("_limits.csv") and f.stat().st_size > 10240:
+                                text_to_search = f"{generic_dir.name} {f.name}"
+                                m_lot = re.search(r'(SYN_\d+)', text_to_search)
+                                lot_id_raw = m_lot.group(1) if m_lot else f.name.split('_')[0]
+                                yield_val = 0.0
+                                match = re.search(r'(\d+(?:\.\d+)?)\s*%', text_to_search)
+                                if match:
+                                    yield_val = float(match.group(1))
+                                inventory.append({
+                                    "path": str(f),
+                                    "filename": f.name,
+                                    "lot_id": lot_id_raw,
+                                    "norm_lot": normalize_lot_id(lot_id_raw),
+                                    "yield": yield_val,
+                                    "mtime": f.stat().st_mtime
+                                })
+    # Deduplicate by norm_lot, keeping the highest yield record
+    inventory.sort(key=lambda x: (x["yield"], x["mtime"]), reverse=True)
+    seen_lots = set()
+    dedup_inventory = []
+    for item in inventory:
+        if item["norm_lot"] not in seen_lots:
+            seen_lots.add(item["norm_lot"])
+            dedup_inventory.append(item)
+    return dedup_inventory
 
 
 @st.cache_data(show_spinner=False)
