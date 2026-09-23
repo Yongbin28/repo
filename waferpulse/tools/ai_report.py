@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
 # Pre-configured default key (reconstructed at runtime to preserve repository security policies)
 DEFAULT_GROQ_API_KEY = "QXJsq1A9IyYkBbyvhmwghhMvYF3bydGWMQayzEyOOcAkRNzrLyKQ_ksg"[::-1]
-DEFAULT_MODELS = ["qwen/qwen3.8-27b", "openai/gpt-oss-20b"]
+DEFAULT_MODELS = ["qwen/qwen3.8-27b", "openai/gpt-oss-120b", "openai/gpt-oss-20b"]
 
 
 def sanitize_api_key(raw_key: Optional[str]) -> str:
