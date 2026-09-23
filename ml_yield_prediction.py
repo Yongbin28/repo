@@ -311,23 +311,39 @@ class YieldPredictor:
                 ref_path = BASE_DIR / f"merged_features_{self.generic}.csv"
             
             meta_drop = ["y", "parent_folder", "lot_id", "file_name", "file_path", "TP_y", "TP_pass_count"]
-            df_ref = pd.read_csv(ref_path)
-            all_cols = df_ref.columns
-            ft_cols_all = [c for c in all_cols if str(c).startswith("FT_")]
-            exp_cols = [c for c in all_cols if c not in meta_drop and not str(c).startswith("FT_")]
+            if ref_path and ref_path.exists():
+                df_ref = pd.read_csv(ref_path)
+                all_cols = df_ref.columns
+                ft_cols_all = [c for c in all_cols if str(c).startswith("FT_")]
+                exp_cols = [c for c in all_cols if c not in meta_drop and not str(c).startswith("FT_")]
+                if ft_cols_all:
+                    y_ref = df_ref[ft_cols_all].dropna(axis=1, how='all')
+                    targets_schema = list(y_ref.columns)
+                else:
+                    targets_schema = ["y"]
+            else:
+                # Robust fallback to feature_names json
+                exp_cols = []
+                if self.model_dir:
+                    import json
+                    for jf in self.model_dir.glob(f"feature_names_*_{self.generic}.json"):
+                        try:
+                            with open(jf, "r", encoding="utf-8") as f:
+                                jdata = json.load(f)
+                                exp_cols = jdata.get("original", [])
+                                if exp_cols:
+                                    break
+                        except Exception:
+                            pass
+                if not exp_cols:
+                    exp_cols = [c for c in fd.keys() if c not in meta_drop and not str(c).startswith("FT_")]
+                targets_schema = ["y"]
             
             X = pd.DataFrame([fd])
             for c in exp_cols:
                 if c not in X.columns: X[c] = np.nan
             X = X[exp_cols].copy()
             X.columns = ml_train_model.sanitize_feature_names(list(X.columns))
-            
-            # Predict targets schema map fallback (if y was multi-out)
-            if ft_cols_all:
-                y_ref = df_ref[ft_cols_all].dropna(axis=1, how='all')
-                targets_schema = list(y_ref.columns)
-            else:
-                targets_schema = ["y"]
             
             # 4. Inference
             preds, valid = {}, []

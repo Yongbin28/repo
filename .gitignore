@@ -51,7 +51,10 @@ ETS364B/
 !dataset/J750/DDR4SDRAM_MT40A1G8/Model/
 !dataset/J750/DDR4SDRAM_MT40A1G8/Model/model_ElasticNet_*.joblib
 !dataset/J750/DDR4SDRAM_MT40A1G8/Model/model_Lasso_*.joblib
+!dataset/J750/DDR4SDRAM_MT40A1G8/Model/explainer_ElasticNet_*.joblib
+!dataset/J750/DDR4SDRAM_MT40A1G8/Model/explainer_Lasso_*.joblib
 !dataset/J750/DDR4SDRAM_MT40A1G8/Model/feature_names_*.json
+!dataset/J750/DDR4SDRAM_MT40A1G8/Model/merged_features_*.csv
 
 !dataset/J750/DDR5DRAM_MT41K256M16-MT/
 !dataset/J750/DDR5DRAM_MT41K256M16-MT/ddr5_limits.csv
@@ -59,7 +62,10 @@ ETS364B/
 !dataset/J750/DDR5DRAM_MT41K256M16-MT/Model/
 !dataset/J750/DDR5DRAM_MT41K256M16-MT/Model/model_ElasticNet_*.joblib
 !dataset/J750/DDR5DRAM_MT41K256M16-MT/Model/model_Lasso_*.joblib
+!dataset/J750/DDR5DRAM_MT41K256M16-MT/Model/explainer_ElasticNet_*.joblib
+!dataset/J750/DDR5DRAM_MT41K256M16-MT/Model/explainer_Lasso_*.joblib
 !dataset/J750/DDR5DRAM_MT41K256M16-MT/Model/feature_names_*.json
+!dataset/J750/DDR5DRAM_MT41K256M16-MT/Model/merged_features_*.csv
 
 # The only bundled model is independently verified on untouched PHM16 CMP
 # campaigns and is required by the production virtual-metrology page.
