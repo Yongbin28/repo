@@ -101,10 +101,11 @@ def sanitize_feature_names(cols: List[str]) -> List[str]:
 class ModelTrainer:
     """Manages training, evaluation, and persistence of multiple regression models."""
 
-    def __init__(self, data_csv: Path, tune: bool = False, log_func: Optional[Callable] = None):
+    def __init__(self, data_csv: Path, tune: bool = False, log_func: Optional[Callable] = None, progress_callback: Optional[Callable] = None):
         self.data_csv = data_csv
         self.tune = tune
         self.log_func = log_func or logger.info
+        self.progress_callback = progress_callback
         self.generic_suffix = self._derive_suffix(data_csv)
         self.results: List[Dict[str, Any]] = []
         self.top_models: List[Tuple[str, Any]] = []
@@ -358,8 +359,10 @@ class ModelTrainer:
         self.log_func(f"[INFO] Dataset: {len(X)} rows, {X.shape[1]} features, {y.shape[1]} targets. Training {len(pipelines)} models...")
 
         evals = []
-        for name, pipe in pipelines:
+        total_models = len(pipelines)
+        for idx, (name, pipe) in enumerate(pipelines):
             try:
+                self.log_func(f"[INFO] [{idx+1}/{total_models}] Training algorithm: {name}...")
                 start = time.time()
                 pipe.fit(X_tr, y_tr.values if is_multi else y_tr.values.ravel())
                 p = pipe.predict(X_val)
@@ -390,9 +393,16 @@ class ModelTrainer:
                 # Store predictions for each target
                 for i, c in enumerate(y.columns):
                     val_preds[f"{name}_{c}"] = p_np[:, i]
+                
+                self.log_func(f"[OK] [{idx+1}/{total_models}] {name} completed in {elapsed:.1f}s (R2: {r_sq:.4f})")
+                if self.progress_callback:
+                    try:
+                        self.progress_callback((idx + 1) / total_models, current=idx + 1, total=total_models)
+                    except Exception:
+                        pass
                     
             except Exception as e:
-                self.log_func(f"[ERR] {name} failed: {e}")
+                self.log_func(f"[ERR] [{idx+1}/{total_models}] {name} failed: {e}")
 
         if not evals: return None
 
@@ -549,7 +559,7 @@ class ModelTrainer:
 
 def run_model_training(data_csv: Path, out_res_path: Path, out_val_path: Path, info: str = "", tune: bool = False, log_func=print, progress_callback=None):
     """Entry point for Streamlit and CLI."""
-    trainer = ModelTrainer(data_csv, tune=tune, log_func=log_func)
+    trainer = ModelTrainer(data_csv, tune=tune, log_func=log_func, progress_callback=progress_callback)
     return trainer.train(out_res_path, out_val_path, info)
 
 def main():

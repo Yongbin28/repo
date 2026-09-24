@@ -607,17 +607,41 @@ def run_pipeline(generics_list, dashboard_ph, logs_ph, status_container,
                 
                 update_dashboard(0.0)
                 
-                def make_prog_cb(task_name):
+                def make_prog_cb(task_name, est_duration=None):
                     start_t = time.time()
                     def cb(frac, current=0, total=0):
                         if ctx and not get_script_run_ctx(): add_script_run_ctx(threading.current_thread(), ctx)
                         elapsed = time.time() - start_t
-                        eta_str = format_time((elapsed / frac) - elapsed) if frac > 0 else "..."
+                        if est_duration and frac < 1.0:
+                            rem_sec = max(0, est_duration - elapsed)
+                            eta_str = format_time(rem_sec)
+                        elif frac > 0:
+                            eta_str = format_time((elapsed / frac) - elapsed)
+                        else:
+                            eta_str = format_time(est_duration) if est_duration else "..."
+                        
                         tracker.update_progress(frac)
                         tracker.update_step_status(f"**{task_name}** | Elapsed: {format_time(elapsed)} | ETA: {eta_str}")
+                        unit = "Models" if "Model" in task_name else "Lots"
                         if total > 0:
-                            tracker.update_status(f"Processing: {current}/{total} Lots", active_task=task_name)
-                        update_dashboard(0.5 + (0.4 * frac))
+                            tracker.update_status(f"Processing: {current}/{total} {unit}", active_task=f"{task_name} ({int(frac*100)}%)")
+                        
+                        # Update dashboard with accurate ETA and elapsed time
+                        pipe_elapsed = time.time() - start_pipeline_time
+                        if est_duration and frac < 1.0:
+                            dashboard_eta = format_time(max(0, est_duration - elapsed))
+                        else:
+                            pipe_prog = (idx + (0.5 + 0.45 * frac)) / total_generics
+                            dashboard_eta = format_time((pipe_elapsed / pipe_prog) - pipe_elapsed) if pipe_prog > 0 else "..."
+                            
+                        metrics = {
+                            "generic": generic,
+                            "progress_str": f"{idx+1}/{total_generics}",
+                            "elapsed_str": format_time(pipe_elapsed),
+                            "eta_str": dashboard_eta if frac < 1.0 else "0s"
+                        }
+                        st.session_state.pipeline_metrics = metrics
+                        render_dashboard(metrics, dashboard_ph)
                     return cb
                 
                 # --- Locate or Ingest Dataset (Solution A vs Solution B) ---
@@ -807,6 +831,17 @@ def run_pipeline(generics_list, dashboard_ph, logs_ph, status_container,
                         except Exception:
                             duration_info = ""
                             
+                        if 'est_time_str' in locals() and est_time_str:
+                            pipe_elapsed = time.time() - start_pipeline_time
+                            metrics = {
+                                "generic": generic,
+                                "progress_str": f"{idx+1}/{total_generics}",
+                                "elapsed_str": format_time(pipe_elapsed),
+                                "eta_str": est_time_str
+                            }
+                            st.session_state.pipeline_metrics = metrics
+                            render_dashboard(metrics, dashboard_ph)
+
                         tracker.update_status("Training Models", active_task=f"Model Training{duration_info}")
                         step_msg_ph.info(f"Running Model Training for {generic}...{duration_info}")
                         log(f"Dataset has {len(df_check)} row(s). Running Model Training...{duration_info}", "INFO")
@@ -818,7 +853,7 @@ def run_pipeline(generics_list, dashboard_ph, logs_ph, status_container,
                         out_val_xlsx = model_dir / f"model_details_{generic}.xlsx"
                         info_str = f"Trained on {generic}\nExtracted Features: {extracted_csv_path.name}"
                         
-                        train_cb = make_prog_cb("Model Training")
+                        train_cb = make_prog_cb("Model Training", est_duration=est_sec if 'est_sec' in locals() else None)
                         
                         # The ML Training Script is lazily loaded.
                         import ml_train_model
