@@ -11,6 +11,7 @@ import threading
 import subprocess
 import asyncio
 import zipfile
+import tarfile
 import tempfile
 import shutil
 import hashlib
@@ -633,7 +634,6 @@ def run_pipeline(generics_list, dashboard_ph, logs_ph, status_container,
                 # Check Solution B: Custom Dataset Source
                 if custom_source:
                     if custom_type == "upload":
-                        import tempfile, zipfile, tarfile
                         temp_extracted_dir = Path(tempfile.mkdtemp(prefix="custom_stage_"))
                         log(f"[Solution B: Ingestion] Staging uploaded archive/files into staging workspace...", "INFO")
                         for up_file in custom_source:
