@@ -2298,7 +2298,7 @@ if app_mode == "Model Preparation Pipeline":
     )
     run_model_training_step = sidebar.checkbox(
         "Train prediction models",
-        value=False,
+        value=True,
         key="run_model_training",
         help="Trains ElasticNet and Lasso regression models from the extracted features."
     )
