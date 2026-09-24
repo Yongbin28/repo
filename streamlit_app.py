@@ -470,7 +470,8 @@ class GenericUITracker:
 def run_pipeline(generics_list, dashboard_ph, logs_ph, status_container, 
                  force_decryptor=None, skip_existing=False, 
                  combine_wafer_data=True, run_feature_extraction_step=True, 
-                 run_model_training_step=True, cleanup_after_generic=True):
+                 run_model_training_step=True, cleanup_after_generic=True,
+                 custom_source=None, custom_type=None):
     # Set dynamic LOG_FILE for this pipeline run
     timestamp = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
     utils.LOG_FILE = CURRENT_DIR / f"pipeline_execution_{timestamp}.log"
@@ -618,25 +619,85 @@ def run_pipeline(generics_list, dashboard_ph, logs_ph, status_container,
                         update_dashboard(0.5 + (0.4 * frac))
                     return cb
                 
-                # --- Locate T&P_Decrypted Dataset ---
+                # --- Locate or Ingest Dataset (Solution A vs Solution B) ---
                 tester_family = get_tester_family_for_generic(generic)
                 if tester_family == "UNKNOWN_FAMILY":
                     tester_family = "J750"
                 tracker.update_status("Locating Dataset", active_task=f"Searching dataset/{tester_family}")
-                step_msg_ph.info(f"Searching local dataset for {generic}...")
+                step_msg_ph.info(f"Locating dataset for {generic}...")
                 
                 target_tp_dir = None
-                real_ds_root = CURRENT_DIR / "dataset" / tester_family
-                if real_ds_root.exists():
-                    for root_dir, dirs, files in os.walk(real_ds_root):
-                        dirname = Path(root_dir).name
-                        if "T&P_Decrypted" in dirs and (dirname == generic or dirname.startswith(f"{generic}_")):
-                            target_tp_dir = Path(root_dir) / "T&P_Decrypted"
-                            log(f"Found existing decrypted data at: {target_tp_dir.relative_to(CURRENT_DIR)}", "OK")
-                            break
+                extracted_csv_path = None
+                temp_extracted_dir = None
                 
+                # Check Solution B: Custom Dataset Source
+                if custom_source:
+                    if custom_type == "upload":
+                        import tempfile, zipfile, tarfile
+                        temp_extracted_dir = Path(tempfile.mkdtemp(prefix="custom_stage_"))
+                        log(f"[Solution B: Ingestion] Staging uploaded archive/files into staging workspace...", "INFO")
+                        for up_file in custom_source:
+                            fn_lower = up_file.name.lower()
+                            if fn_lower.endswith(".zip"):
+                                try:
+                                    with zipfile.ZipFile(up_file) as zf:
+                                        zf.extractall(temp_extracted_dir)
+                                    log(f"[Solution B] Unzipped archive: {up_file.name}", "OK")
+                                except Exception as ze:
+                                    log(f"Zip extraction error ({up_file.name}): {ze}", "ERR")
+                            elif fn_lower.endswith((".tar.gz", ".tgz", ".tar")):
+                                try:
+                                    with tarfile.open(fileobj=up_file) as tf:
+                                        tf.extractall(temp_extracted_dir)
+                                    log(f"[Solution B] Extracted tarball: {up_file.name}", "OK")
+                                except Exception as te:
+                                    log(f"Tar extraction error ({up_file.name}): {te}", "ERR")
+                            else:
+                                try:
+                                    dest = temp_extracted_dir / up_file.name
+                                    with open(dest, "wb") as f_out:
+                                        f_out.write(up_file.getvalue())
+                                except Exception as fe:
+                                    log(f"File stage error ({up_file.name}): {fe}", "ERR")
+                        
+                        csv_dirs = [p.parent for p in temp_extracted_dir.rglob("*.csv")]
+                        target_tp_dir = csv_dirs[0] if csv_dirs else temp_extracted_dir
+                        log(f"[Solution B: Staged] Ready to process {len(list(temp_extracted_dir.rglob('*')))} file(s) in staging area.", "OK")
+                    elif custom_type == "path":
+                        p_dir = Path(custom_source)
+                        if p_dir.exists():
+                            target_tp_dir = p_dir
+                            log(f"[Solution B: On-Premise Pathway] Ingesting from directory: {p_dir}", "OK")
+                        else:
+                            log(f"[Solution B] Specified directory '{p_dir}' was not found.", "WARN")
+
+                # Check Solution A: Default Repository Search & Cloud Baseline Fallback
                 if not target_tp_dir:
-                    log(f"No decrypted data found in {real_ds_root} for {generic}.", "WARN")
+                    real_ds_root = CURRENT_DIR / "dataset" / tester_family
+                    if real_ds_root.exists():
+                        for root_dir, dirs, files in os.walk(real_ds_root):
+                            dirname = Path(root_dir).name
+                            if "T&P_Decrypted" in dirs and (dirname == generic or dirname.startswith(f"{generic}_")):
+                                target_tp_dir = Path(root_dir) / "T&P_Decrypted"
+                                log(f"Found existing decrypted data at: {target_tp_dir.relative_to(CURRENT_DIR)}", "OK")
+                                break
+                    
+                    # Check for pre-extracted feature dataset
+                    existing_model_dir = None
+                    if real_ds_root.exists():
+                        for root_dir, dirs, files in os.walk(real_ds_root):
+                            dirname = Path(root_dir).name
+                            if (dirname == generic or dirname.startswith(f"{generic}_")) and "Model" in dirs:
+                                existing_model_dir = Path(root_dir) / "Model"
+                                break
+                    
+                    feat_candidate = existing_model_dir / f"merged_features_{generic}.csv" if existing_model_dir else None
+                    if not target_tp_dir:
+                        if feat_candidate and feat_candidate.exists():
+                            log(f"[Solution A: Cloud Baseline] Raw uncompressed wafer logs (~2GB) reside on local fab storage. Found bundled feature matrix: {feat_candidate.name}", "OK")
+                            extracted_csv_path = feat_candidate
+                        else:
+                            log(f"No decrypted data found in {real_ds_root} for {generic}.", "WARN")
                 
                 # --- Yield Mapping (Obsolete: Yield is embedded in folder names) ---
                 yield_data_path = None
@@ -645,44 +706,36 @@ def run_pipeline(generics_list, dashboard_ph, logs_ph, status_container,
 
                 # --- Wafer Data Combiner ---
                 if combine_wafer_data:
-                    # Guard: Only run if target_tp_dir exists
                     if target_tp_dir and target_tp_dir.exists():
                         tracker.update_status("Combining Wafer Data", active_task="Merging CSVs")
                         step_msg_ph.info(f"Running Wafer Data Combiner for {generic}...")
                         log("Running Wafer Data Combiner...", "INFO")
                         
-                        # Wafer_Data_Combiner is lazily loaded.
                         import wafer_data_combiner
-                        
                         try:
-                            # Processing is performed using the correctly identified parent directory for T&P_Decrypted.
-                            wafer_data_combiner.find_and_process_all(str(target_tp_dir.parent), log_func=log)
+                            parent_target = str(target_tp_dir.parent) if target_tp_dir.name == "T&P_Decrypted" else str(target_tp_dir)
+                            wafer_data_combiner.find_and_process_all(parent_target, log_func=log)
                         except Exception as e:
                             log(f"Combiner error: {e}", "ERR")
                         
-                        # FORCE UI UPDATE AFTER COMBINER
                         log("Finished Wafer Data Combiner Phase.", "INFO")
+                        update_dashboard(0.75)
+                        update_log_ui(force=True)
+                    elif extracted_csv_path and extracted_csv_path.exists():
+                        log(f"[Solution A] Pre-consolidated feature matrix already available ({extracted_csv_path.name}). Skipping raw combiner phase.", "INFO")
                         update_dashboard(0.75)
                         update_log_ui(force=True)
                     else:
                         log(f"Skipping Wafer Data Combiner for {generic}: No input directory found.", "WARN")
                         
                 # --- Feature Extraction (ML_Compute_Statistic.py) ---
-                extracted_csv_path = None
                 if run_feature_extraction_step:
                     tracker.update_status("Extracting Features", active_task="Feature Extraction")
                     step_msg_ph.info(f"Running Feature Extraction for {generic}...")
                     log("Running Feature Extraction...", "INFO")
                     
-                    # The dynamically discovered T&P_Decrypted folder is used.
-                    input_tp_dir = target_tp_dir
-                    
-                    # A check is performed to verify if target_tp_dir exists and contains data.
-                    if not target_tp_dir or not target_tp_dir.exists():
-                        log(f"Skipping Feature Extraction for {generic}: No decrypted data found.", "WARN")
-                        extracted_csv_path = None
-                    else:
-                        # Inspect directory
+                    if target_tp_dir and target_tp_dir.exists():
+                        input_tp_dir = target_tp_dir
                         try:
                             has_data = any(target_tp_dir.iterdir())
                         except:
@@ -692,18 +745,12 @@ def run_pipeline(generics_list, dashboard_ph, logs_ph, status_container,
                             log(f"Skipping Feature Extraction for {generic}: {target_tp_dir.name} is empty.", "WARN")
                             extracted_csv_path = None
                         else:
-                            # The output Model folder is created only if valid data exists.
-                            model_dir = target_tp_dir.parent / "Model"
+                            model_dir = target_tp_dir.parent / "Model" if target_tp_dir.name == "T&P_Decrypted" else target_tp_dir / "Model"
                             model_dir.mkdir(parents=True, exist_ok=True)
-                            
                             output_features_csv = model_dir / f"merged_features_{generic}.csv"
-                            
-                            # A custom info log wrapper is passed to log_func, and a progress bar is provided to progress_callback.
                             feat_cb = make_prog_cb("Feature Extraction")
                             
-                            # Feature Extraction is lazily loaded.
                             import ml_compute_statistic
-                            
                             try:
                                 folder_data = ml_compute_statistic.run_feature_extraction(
                                     root=input_tp_dir, 
@@ -719,6 +766,11 @@ def run_pipeline(generics_list, dashboard_ph, logs_ph, status_container,
                                     log(f"Feature Extraction failed or produced no data.", "WARN")
                             except Exception as e:
                                 log(f"Feature Extraction error: {e}", "ERR")
+                    elif extracted_csv_path and extracted_csv_path.exists():
+                        log(f"[Solution A] Using pre-extracted cloud feature matrix '{extracted_csv_path.name}' ({extracted_csv_path.stat().st_size // 1024} KB).", "OK")
+                    else:
+                        log(f"Skipping Feature Extraction for {generic}: No decrypted data found.", "WARN")
+                        extracted_csv_path = None
                     
                     update_dashboard(0.85)
                 
@@ -884,6 +936,8 @@ def run_pipeline(generics_list, dashboard_ph, logs_ph, status_container,
                         for td in all_temp_dirs:
                             shutil.rmtree(td, ignore_errors=True)
                     
+                    if 'temp_extracted_dir' in locals() and temp_extracted_dir and temp_extracted_dir.exists():
+                        shutil.rmtree(temp_extracted_dir, ignore_errors=True)
                     shutil.rmtree(generic_temp_dir, ignore_errors=True)
                     log(f"Local isolated workspace for {generic} cleaned.", "INFO")
                 except: pass
@@ -2187,23 +2241,74 @@ if app_mode == "Model Preparation Pipeline":
     skip_existing = sidebar.checkbox("Skip Already Processed", value=True, key="skip_existing")
     
     sidebar.markdown("---")
-    sidebar.subheader("Local Demonstration Preparation")
+    sidebar.subheader("Dataset Ingestion Mode")
+    ingest_mode = sidebar.radio(
+        "Select Ingestion Mode",
+        options=[
+            "Solution A: Pre-Extracted Cloud Baseline (Default)",
+            "Solution B: Custom Dataset Pathway / Folder Upload"
+        ],
+        index=0,
+        help="Solution A automatically leverages the bundled 100-lot feature matrix for cloud deployment. Solution B lets you upload a custom folder/archive or specify an on-premise fab directory."
+    )
+    
+    custom_source = None
+    custom_type = None
+    if "Solution B" in ingest_mode:
+        sidebar.markdown("#### 📂 Custom Data Source")
+        b_input_choice = sidebar.radio(
+            "Input Method",
+            ["Upload Zipped Folder / Multiple Files", "Specify Local / On-Premise Directory Path"],
+            index=0
+        )
+        if b_input_choice == "Upload Zipped Folder / Multiple Files":
+            uploaded_folder_files = sidebar.file_uploader(
+                "Upload Folder Archive (.zip, .tar.gz) or Multiple Files",
+                type=["zip", "gz", "tar", "csv", "stdf", "std", "std_1"],
+                accept_multiple_files=True,
+                help="Upload a zipped folder containing lot files or select multiple lot CSV/STDF files.",
+                key="pipeline_custom_upload"
+            )
+            if uploaded_folder_files:
+                custom_source = uploaded_folder_files
+                custom_type = "upload"
+                sidebar.success(f"📦 Staged {len(uploaded_folder_files)} file(s) for pipeline ingestion.")
+        else:
+            custom_dir_input = sidebar.text_input(
+                "On-Premise Dataset Directory Path",
+                value="",
+                placeholder="e.g. D:/Micron/Fab_Data/DDR4",
+                help="Absolute path to a local directory containing raw or decrypted lot data.",
+                key="pipeline_custom_path"
+            )
+            if custom_dir_input.strip():
+                custom_source = custom_dir_input.strip()
+                custom_type = "path"
+                sidebar.info(f"📂 Pathway set to: `{custom_source}`")
+    else:
+        sidebar.caption("⚡ **Solution A Active**: Cloud container automatically links to pre-extracted 100-lot feature matrices without needing gigabytes of raw uncompressed wafer dumps.")
+
+    sidebar.markdown("---")
+    sidebar.subheader("Pipeline Execution Steps")
     run_feature_extraction_step = sidebar.checkbox(
         "Prepare local statistical features",
         value=True,
         key="run_feature_extraction",
         help="Prepares local/STDF statistics used by the demonstration modules.",
     )
-    run_model_training_step = False
-    sidebar.caption(
-        "Prediction-model training is disabled in this lane. Use Open-Source Equipment "
-        "Prediction for reportable model training and validation."
+    run_model_training_step = sidebar.checkbox(
+        "Train prediction models",
+        value=False,
+        key="run_model_training",
+        help="Trains ElasticNet and Lasso regression models from the extracted features."
     )
 
     def handle_run():
         st.session_state.processing = True
         st.session_state.start_pipeline = True
         st.session_state.pipeline_finished = False
+        st.session_state.pipeline_custom_source = custom_source
+        st.session_state.pipeline_custom_type = custom_type
         # Ensure logs are cleared immediately upon clicking Run
         st.session_state.logs = ["[INFO] Initiating pipeline..."]
         st.session_state.generic_results = {}
@@ -2412,7 +2517,9 @@ if app_mode == "Model Preparation Pipeline":
                 combine_wafer_data=combine_wafer_data,
                 run_feature_extraction_step=run_feature_extraction_step,
                 run_model_training_step=run_model_training_step,
-                cleanup_after_generic=cleanup_after_generic
+                cleanup_after_generic=cleanup_after_generic,
+                custom_source=st.session_state.get("pipeline_custom_source"),
+                custom_type=st.session_state.get("pipeline_custom_type")
             )
             # Auto_generic is cleaned up if it was used.
             if "auto_generic" in st.session_state: del st.session_state["auto_generic"]
