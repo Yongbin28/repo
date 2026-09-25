@@ -18,8 +18,8 @@ from waferpulse.dashboard.dataset_analysis import (
 )
 from waferpulse.dashboard.equipment_prediction_page import render_equipment_prediction_page
 
-EQUIPMENT_SOURCE = "EquipmentData CSV benchmark"
 BOSCH_SOURCE = "Zenodo BOSCH plasma-etch benchmark"
+EQUIPMENT_SOURCE = "Two-Stage Tool Sensor Telemetry (Multi-Chamber Benchmark)"
 LOCAL_SOURCE = "Local dataset analysis"
 
 
@@ -35,19 +35,10 @@ def render_model_prediction_workspace(current_dir: Path, sidebar: Any) -> None:
     sidebar.subheader("Prediction Dataset")
     source = sidebar.radio(
         "Select data source",
-        options=[EQUIPMENT_SOURCE, BOSCH_SOURCE, LOCAL_SOURCE],
+        options=[BOSCH_SOURCE, EQUIPMENT_SOURCE, LOCAL_SOURCE],
         key="prediction_dataset_source",
         help="Each public source uses its own schema-aware feature and model pipeline.",
     )
-
-    if source == EQUIPMENT_SOURCE:
-        prediction, analysis = st.tabs(["Model prediction", "Source data analysis"])
-        with prediction:
-            render_equipment_prediction_page(current_dir, sidebar, show_intro=False)
-        with analysis:
-            st.subheader("EquipmentData local source explorer")
-            render_equipment_source_analysis(current_dir)
-        return
 
     if source == BOSCH_SOURCE:
         st.caption(f"Public source: [Zenodo record 17122442]({ZENODO_RECORD_URL})")
@@ -57,6 +48,15 @@ def render_model_prediction_workspace(current_dir: Path, sidebar: Any) -> None:
         with analysis:
             st.subheader("Zenodo BOSCH local source explorer")
             render_bosch_source_analysis(current_dir)
+        return
+
+    if source == EQUIPMENT_SOURCE:
+        prediction, analysis = st.tabs(["Model prediction", "Source data analysis"])
+        with prediction:
+            render_equipment_prediction_page(current_dir, sidebar, show_intro=False)
+        with analysis:
+            st.subheader("Two-Stage Multi-Chamber Local Source Explorer")
+            render_equipment_source_analysis(current_dir)
         return
 
     render_data_lane_notice(LOCAL_DEMONSTRATION)

@@ -399,7 +399,7 @@ def render_equipment_prediction_page(
             "response. Bosch plasma etch is the current documented project benchmark."
         )
     else:
-        st.subheader("EquipmentData wafer-response prediction")
+        st.subheader("Two-Stage Multi-Chamber Sensor Telemetry Prediction")
         st.caption("equipment1.csv + equipment2.csv → continuous response and bad-wafer risk")
     config = _render_configuration(sidebar)
     result, dataset, summary, quality, provenance = _active_evidence(paths.equipment_output)
