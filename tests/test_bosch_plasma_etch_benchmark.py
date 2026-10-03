@@ -42,3 +42,11 @@ def test_group_oof_never_fits_the_held_out_group() -> None:
 
     assert np.allclose(predicted[:2], 10.0)
     assert np.allclose(predicted[2:], 0.0)
+
+
+def test_bosch_search_profiles_change_tree_budget() -> None:
+    conservative = model_candidates(5, "conservative")["extra_trees"]
+    extensive = model_candidates(5, "extensive")["extra_trees"]
+
+    assert conservative.named_steps["model"].n_estimators == 80
+    assert extensive.named_steps["model"].n_estimators == 260

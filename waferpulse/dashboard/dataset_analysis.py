@@ -12,6 +12,12 @@ import plotly.express as px
 import streamlit as st
 from pandas.api.types import is_numeric_dtype
 
+from waferpulse.agents.groq_model_selection_agent import (
+    DEFAULT_MAX_AGENT_ITERATIONS,
+    choose_search_profile_from_summary,
+)
+from waferpulse.tools.local_automl import benchmark_local_regression
+
 SUPPORTED_UPLOAD_TYPES = ("csv", "tsv", "xlsx", "parquet")
 MAX_ANALYSIS_ROWS = 50_000
 ZENODO_RECORD_URL = "https://zenodo.org/records/17122442"
@@ -481,7 +487,7 @@ def render_bosch_source_analysis(current_dir: Path) -> None:
         )
 
 
-def render_uploaded_dataset_analysis() -> None:
+def render_uploaded_dataset_analysis(sidebar: Any | None = None) -> None:
     st.info(
         "Upload one local table for exploratory analysis. It is not combined with either "
         "public benchmark and is not used to claim model accuracy."
@@ -498,6 +504,34 @@ def render_uploaded_dataset_analysis() -> None:
             "distributions, and optional target associations."
         )
         return
+
+    use_agentic_controller = False
+    max_agent_iterations = DEFAULT_MAX_AGENT_ITERATIONS
+    groq_api_key = ""
+    if sidebar is not None:
+        sidebar.markdown("---")
+        sidebar.subheader("Local AutoML")
+        use_agentic_controller = sidebar.checkbox(
+            "Groq agentic AutoML planner",
+            value=False,
+            key="local_agentic_automl",
+            help="Falls back to the balanced nine-model workflow on any agent failure.",
+        )
+        max_agent_iterations = sidebar.slider(
+            "Maximum agent iterations",
+            1,
+            8,
+            DEFAULT_MAX_AGENT_ITERATIONS,
+            key="local_agent_iterations",
+            disabled=not use_agentic_controller,
+        )
+        groq_api_key = sidebar.text_input(
+            "Groq API key",
+            type="password",
+            key="local_groq_api_key",
+            disabled=not use_agentic_controller,
+            help="Leave blank to use GROQ_API_KEY.",
+        )
     try:
         with st.spinner(f"Reading {uploaded.name}..."):
             frame = read_table_bytes(uploaded.name, uploaded.getvalue())
@@ -512,3 +546,79 @@ def render_uploaded_dataset_analysis() -> None:
             f"Local in-memory upload: {uploaded.name}. The dashboard does not save this file."
         ),
     )
+
+    st.markdown("### Optional Local Regression AutoML")
+    numeric_targets = [
+        str(column)
+        for column in frame.columns
+        if pd.to_numeric(frame[column], errors="coerce").notna().sum() >= 30
+    ]
+    if not numeric_targets:
+        st.info("A local regression benchmark requires a numeric target with at least 30 values.")
+        return
+    target_column = st.selectbox(
+        "Regression target",
+        options=numeric_targets,
+        key="local_automl_target",
+    )
+    group_choice = st.selectbox(
+        "Validation group column",
+        options=["No group column", *[str(column) for column in frame.columns if str(column) != target_column]],
+        key="local_automl_group",
+        help="Select lot, batch, wafer family, or another leakage boundary when available.",
+    )
+    if st.button("Run Local Nine-Model AutoML", type="primary", use_container_width=True):
+        group_column = None if group_choice == "No group column" else group_choice
+        group_count = int(frame[group_column].nunique()) if group_column else 0
+        decision = choose_search_profile_from_summary(
+            {
+                "samples": int(len(frame)),
+                "features": int(frame.shape[1] - 1),
+                "manufacturing_lots": group_count,
+                "task": f"local regression target {target_column}",
+            },
+            enabled=use_agentic_controller,
+            api_key=groq_api_key or None,
+            max_iterations=max_agent_iterations,
+        )
+        try:
+            with st.spinner("Running local nine-model benchmark..."):
+                metrics, predictions, metadata = benchmark_local_regression(
+                    frame,
+                    target_column=target_column,
+                    group_column=group_column,
+                    search_profile=decision.search_profile,
+                )
+            st.session_state["local_automl_result"] = (
+                metrics,
+                predictions,
+                metadata,
+                decision.as_dict(),
+            )
+        except Exception as exc:
+            st.error(f"Local AutoML could not run: {exc}")
+    result = st.session_state.get("local_automl_result")
+    if result is not None:
+        metrics, predictions, metadata, decision = result
+        champion = metrics.iloc[0]
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Champion", str(champion["model"]).replace("_", " ").title())
+        c2.metric("Out-of-fold R²", f"{champion['r2']:.4f}")
+        c3.metric("RMSE", f"{champion['rmse']:.4f}")
+        st.caption(
+            f"{metadata['validation']} · profile {metadata['search_profile']} · "
+            f"agent status {decision['status']}. The uploaded file remains in memory only."
+        )
+        st.dataframe(metrics, use_container_width=True, hide_index=True)
+        champion_predictions = predictions.loc[
+            predictions["model"].eq(champion["model"])
+        ]
+        st.plotly_chart(
+            px.scatter(
+                champion_predictions,
+                x="actual",
+                y="predicted",
+                title="Champion out-of-fold predictions",
+            ),
+            use_container_width=True,
+        )

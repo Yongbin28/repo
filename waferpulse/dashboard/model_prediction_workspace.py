@@ -61,4 +61,4 @@ def render_model_prediction_workspace(current_dir: Path, sidebar: Any) -> None:
 
     render_data_lane_notice(LOCAL_DEMONSTRATION)
     st.subheader("Local dataset explorer")
-    render_uploaded_dataset_analysis()
+    render_uploaded_dataset_analysis(sidebar)

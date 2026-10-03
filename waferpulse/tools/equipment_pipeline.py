@@ -36,6 +36,8 @@ def run_equipment_pipeline(
     n_splits: int = 5,
     selected_features: int = DEFAULT_SELECTED_FEATURES,
     n_estimators: int = 180,
+    search_profile: str = "balanced",
+    agentic_decision: Optional[dict] = None,
     log_func: Optional[Callable[[str], None]] = None,
 ) -> EquipmentModelResult:
     dataset = load_equipment_dataset(
@@ -50,6 +52,8 @@ def run_equipment_pipeline(
         n_splits=n_splits,
         selected_features=selected_features,
         n_estimators=n_estimators,
+        search_profile=search_profile,
+        agentic_decision=agentic_decision,
         log_func=log_func,
     )
 

@@ -17,6 +17,7 @@ from waferpulse.tools.equipment_pipeline import (
     EquipmentDataset,
     EquipmentModelResult,
 )
+from waferpulse.agents.groq_model_selection_agent import DEFAULT_MAX_AGENT_ITERATIONS
 
 
 class EquipmentPredictionCrew:
@@ -55,6 +56,9 @@ class EquipmentPredictionCrew:
         n_splits: int = 5,
         selected_features: int = DEFAULT_SELECTED_FEATURES,
         n_estimators: int = 180,
+        use_agentic_controller: bool = False,
+        groq_api_key: Optional[str] = None,
+        max_agent_iterations: int = DEFAULT_MAX_AGENT_ITERATIONS,
         log_func: Optional[Callable[[str], None]] = None,
     ) -> EquipmentModelResult:
         dataset = self.validate(
@@ -71,5 +75,8 @@ class EquipmentPredictionCrew:
             n_splits=n_splits,
             selected_features=selected_features,
             n_estimators=n_estimators,
+            use_agentic_controller=use_agentic_controller,
+            groq_api_key=groq_api_key,
+            max_agent_iterations=max_agent_iterations,
             log_func=log_func,
         )

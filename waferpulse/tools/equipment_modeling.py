@@ -14,11 +14,13 @@ from sklearn.base import BaseEstimator, RegressorMixin, clone
 from sklearn.ensemble import (
     ExtraTreesClassifier,
     ExtraTreesRegressor,
+    HistGradientBoostingRegressor,
     RandomForestClassifier,
     RandomForestRegressor,
 )
 from sklearn.feature_selection import SelectKBest, VarianceThreshold, f_classif, f_regression
 from sklearn.impute import SimpleImputer
+from sklearn.linear_model import ElasticNet, Lasso, Ridge
 from sklearn.metrics import (
     average_precision_score,
     brier_score_loss,
@@ -31,9 +33,13 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 from sklearn.model_selection import GroupKFold, KFold, StratifiedGroupKFold
+from sklearn.neighbors import KNeighborsRegressor
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
+
+from lightgbm import LGBMRegressor
+from xgboost import XGBRegressor
 
 from waferpulse.core.data_lanes import REAL_OPEN_SOURCE
 from waferpulse.core.equipment_contracts import (
@@ -231,30 +237,36 @@ def _make_regression_candidates(
     random_state: int,
     n_estimators: int,
 ) -> Dict[str, Any]:
-    pre = [
+    tree_pre = [
         ("imputer", SimpleImputer(strategy="median", add_indicator=True)),
         ("variance", VarianceThreshold()),
         ("selector", SelectKBest(score_func=f_regression, k=selected_features)),
     ]
+    scaled_pre = tree_pre + [("scale", StandardScaler())]
     return {
-        "QualityHurdleForestBlend": QualityHurdleForestBlendRegressor(
-            response_threshold=0.75,
-            c=0.4,
-            gamma=0.0015,
-            probability_scale=0.75,
-            hurdle_weight=0.7,
-            selected_features=selected_features,
-            n_estimators=n_estimators,
-            random_state=random_state,
+        "Ridge": Pipeline(scaled_pre + [("model", Ridge(alpha=10.0))]),
+        "Lasso": Pipeline(
+            scaled_pre + [("model", Lasso(alpha=0.1, max_iter=10000, random_state=random_state))]
         ),
-        "QualityHurdleSVM": QualityHurdleRegressor(
-            response_threshold=0.75,
-            c=0.3,
-            gamma=0.002,
-            random_state=random_state,
+        "ElasticNet": Pipeline(
+            scaled_pre
+            + [
+                (
+                    "model",
+                    ElasticNet(
+                        alpha=0.1,
+                        l1_ratio=0.5,
+                        max_iter=10000,
+                        random_state=random_state,
+                    ),
+                )
+            ]
+        ),
+        "KNN": Pipeline(
+            scaled_pre + [("model", KNeighborsRegressor(n_neighbors=5, weights="distance"))]
         ),
         "ExtraTrees": Pipeline(
-            pre
+            tree_pre
             + [
                 (
                     "model",
@@ -262,6 +274,7 @@ def _make_regression_candidates(
                         n_estimators=n_estimators,
                         max_depth=12,
                         min_samples_leaf=2,
+                        ccp_alpha=0.0,
                         max_features="sqrt",
                         # A single worker is deliberate: the desktop/PyInstaller runtime
                         # can deny creation of joblib worker handles on Windows.
@@ -272,7 +285,7 @@ def _make_regression_candidates(
             ]
         ),
         "RandomForest": Pipeline(
-            pre
+            tree_pre
             + [
                 (
                     "model",
@@ -280,6 +293,7 @@ def _make_regression_candidates(
                         n_estimators=n_estimators,
                         max_depth=12,
                         min_samples_leaf=2,
+                        ccp_alpha=0.0,
                         max_features="sqrt",
                         n_jobs=1,
                         random_state=random_state,
@@ -287,7 +301,172 @@ def _make_regression_candidates(
                 )
             ]
         ),
+        "HistGBR": Pipeline(
+            tree_pre
+            + [
+                (
+                    "model",
+                    HistGradientBoostingRegressor(
+                        max_iter=n_estimators,
+                        max_depth=8,
+                        min_samples_leaf=10,
+                        random_state=random_state,
+                    ),
+                )
+            ]
+        ),
+        "XGBoost": Pipeline(
+            tree_pre
+            + [
+                (
+                    "model",
+                    XGBRegressor(
+                        n_estimators=n_estimators,
+                        max_depth=6,
+                        learning_rate=0.05,
+                        subsample=0.8,
+                        colsample_bytree=0.8,
+                        objective="reg:squarederror",
+                        n_jobs=1,
+                        random_state=random_state,
+                    ),
+                )
+            ]
+        ),
+        "LightGBM": Pipeline(
+            tree_pre
+            + [
+                (
+                    "model",
+                    LGBMRegressor(
+                        n_estimators=n_estimators,
+                        max_depth=6,
+                        learning_rate=0.05,
+                        subsample=0.8,
+                        colsample_bytree=0.8,
+                        n_jobs=1,
+                        verbosity=-1,
+                        random_state=random_state,
+                    ),
+                )
+            ]
+        ),
     }
+
+
+def _regression_parameter_grids(
+    search_profile: str = "balanced",
+) -> Dict[str, List[Dict[str, Any]]]:
+    """Small, auditable grids; tree grids explicitly control growth and pruning."""
+
+    balanced = {
+        "Ridge": [{"model__alpha": value} for value in (1.0, 10.0, 100.0)],
+        "Lasso": [{"model__alpha": value} for value in (0.01, 0.1, 1.0)],
+        "ElasticNet": [
+            {"model__alpha": alpha, "model__l1_ratio": ratio}
+            for alpha in (0.01, 0.1)
+            for ratio in (0.25, 0.5, 0.75)
+        ],
+        "KNN": [
+            {"model__n_neighbors": neighbors, "model__weights": weights}
+            for neighbors in (3, 5, 9)
+            for weights in ("uniform", "distance")
+        ],
+        "ExtraTrees": [
+            {
+                "model__max_depth": depth,
+                "model__min_samples_leaf": leaf,
+                "model__ccp_alpha": alpha,
+            }
+            for depth in (8, 12, None)
+            for leaf in (2, 5)
+            for alpha in (0.0, 0.0001)
+        ],
+        "RandomForest": [
+            {
+                "model__max_depth": depth,
+                "model__min_samples_leaf": leaf,
+                "model__ccp_alpha": alpha,
+            }
+            for depth in (8, 12, None)
+            for leaf in (2, 5)
+            for alpha in (0.0, 0.0001)
+        ],
+        "HistGBR": [
+            {"model__max_depth": depth, "model__min_samples_leaf": leaf}
+            for depth in (4, 8, None)
+            for leaf in (10, 20)
+        ],
+        "XGBoost": [
+            {"model__max_depth": depth, "model__min_child_weight": child}
+            for depth in (3, 6, 9)
+            for child in (1, 5)
+        ],
+        "LightGBM": [
+            {"model__max_depth": depth, "model__min_child_samples": leaf}
+            for depth in (4, 6, 10)
+            for leaf in (10, 20)
+        ],
+    }
+    if search_profile == "balanced":
+        return balanced
+    if search_profile == "conservative":
+        # Preserve a representative baseline and one alternative per algorithm.
+        return {name: values[: min(2, len(values))] for name, values in balanced.items()}
+    if search_profile == "extensive":
+        extensive = dict(balanced)
+        extensive["ExtraTrees"] = balanced["ExtraTrees"] + [
+            {
+                "model__max_depth": depth,
+                "model__min_samples_leaf": leaf,
+                "model__ccp_alpha": alpha,
+            }
+            for depth in (6, 16)
+            for leaf in (1, 10)
+            for alpha in (0.0, 0.001)
+        ]
+        extensive["RandomForest"] = balanced["RandomForest"] + [
+            {
+                "model__max_depth": depth,
+                "model__min_samples_leaf": leaf,
+                "model__ccp_alpha": alpha,
+            }
+            for depth in (6, 16)
+            for leaf in (1, 10)
+            for alpha in (0.0, 0.001)
+        ]
+        return extensive
+    raise ValueError(f"Unknown regression search profile: {search_profile}")
+
+
+def _tune_regression_candidate(
+    name: str,
+    template: Any,
+    X: pd.DataFrame,
+    y: np.ndarray,
+    groups: np.ndarray,
+    n_splits: int,
+    search_profile: str = "balanced",
+) -> Tuple[Any, Dict[str, Any], float]:
+    """Choose parameters only from inner, lot-held-out folds."""
+
+    inner_splits = min(max(2, n_splits - 1), int(pd.Series(groups).nunique()))
+    splitter = GroupKFold(n_splits=inner_splits)
+    best_score = -np.inf
+    best_params: Dict[str, Any] = {}
+    for params in _regression_parameter_grids(search_profile)[name]:
+        fold_scores: List[float] = []
+        for train_index, validation_index in splitter.split(X, y, groups):
+            candidate = clone(template).set_params(**params)
+            candidate.fit(X.iloc[train_index], y[train_index])
+            prediction = candidate.predict(X.iloc[validation_index])
+            fold_scores.append(float(r2_score(y[validation_index], prediction)))
+        score = float(np.mean(fold_scores))
+        # Stable first-wins tie handling keeps the search reproducible.
+        if score > best_score:
+            best_score = score
+            best_params = params
+    return clone(template).set_params(**best_params), best_params, best_score
 
 
 def _make_classification_candidates(
@@ -422,14 +601,27 @@ def _importance_table(
             tables.append(pipeline.feature_relevance_table())
             continue
         names = _selected_feature_names(pipeline, input_columns)
-        importances = np.asarray(pipeline.named_steps["model"].feature_importances_, dtype=float)
+        estimator = pipeline.named_steps["model"]
+        if hasattr(estimator, "feature_importances_"):
+            importances = np.asarray(estimator.feature_importances_, dtype=float)
+            method = "tree_impurity"
+        elif hasattr(estimator, "coef_"):
+            importances = np.abs(np.asarray(estimator.coef_, dtype=float)).reshape(-1)
+            total = float(importances.sum())
+            importances = importances / total if total > 0 else importances
+            method = "absolute_standardized_coefficient"
+        else:
+            # KNN has no intrinsic global feature importance. Keeping explicit
+            # zeros is more honest than presenting a fabricated ranking.
+            importances = np.zeros(len(names), dtype=float)
+            method = "not_available_for_estimator"
         tables.append(
             pd.DataFrame(
                 {
                     "task": task,
                     "feature": names,
                     "importance": importances,
-                    "importance_method": "tree_impurity",
+                    "importance_method": method,
                 }
             ).sort_values("importance", ascending=False)
         )
@@ -498,6 +690,8 @@ def train_equipment_models(
     selected_features: int = DEFAULT_SELECTED_FEATURES,
     n_estimators: int = 180,
     random_state: int = DEFAULT_RANDOM_STATE,
+    search_profile: str = "balanced",
+    agentic_decision: Optional[Dict[str, Any]] = None,
     log_func: Optional[Callable[[str], None]] = None,
 ) -> EquipmentModelResult:
     """Train champion models using stratified, lot-grouped out-of-fold validation."""
@@ -532,17 +726,37 @@ def train_equipment_models(
         _log(log_func, f"Validating real-data regression candidate: {name}...")
         oof = np.full(len(X), np.nan, dtype=float)
         folds: List[Dict[str, Any]] = []
+        tuning: List[Dict[str, Any]] = []
         for fold, (train_index, validation_index) in enumerate(splits, start=1):
-            model = clone(base_model)
+            model, best_params, inner_r2 = _tune_regression_candidate(
+                name,
+                base_model,
+                X.iloc[train_index].reset_index(drop=True),
+                y_reg[train_index],
+                groups[train_index],
+                n_splits,
+                search_profile,
+            )
             model.fit(X.iloc[train_index], y_reg[train_index])
             predicted = model.predict(X.iloc[validation_index])
             oof[validation_index] = predicted
             fold_metric = _regression_metrics(y_reg[validation_index], predicted)
-            folds.append({"task": "regression", "model": name, "fold": fold, **fold_metric})
+            folds.append(
+                {
+                    "task": "regression",
+                    "model": name,
+                    "fold": fold,
+                    "inner_tuning_r2": inner_r2,
+                    "selected_parameters": json.dumps(_json_value(best_params), sort_keys=True),
+                    **fold_metric,
+                }
+            )
+            tuning.append({"fold": fold, "inner_r2": inner_r2, "parameters": best_params})
         regression_runs[name] = {
             "oof": oof,
             "metrics": _regression_metrics(y_reg, oof),
             "folds": folds,
+            "tuning": tuning,
             "template": base_model,
         }
 
@@ -565,9 +779,9 @@ def train_equipment_models(
             "template": base_model,
         }
 
-    regression_name = min(
+    regression_name = max(
         regression_runs,
-        key=lambda name: regression_runs[name]["metrics"]["rmse"],
+        key=lambda name: regression_runs[name]["metrics"]["r2"],
     )
     classification_name = max(
         classification_runs,
@@ -622,8 +836,23 @@ def train_equipment_models(
         ),
     }
 
-    _log(log_func, f"Regression champion: {regression_name}; fitting on all real wafers...")
-    regression_model = clone(selected_regression["template"]).fit(X, y_reg)
+    _log(
+        log_func,
+        f"Regression champion by nested lot-grouped OOF R²: {regression_name}; "
+        "tuning on all development lots and fitting final model...",
+    )
+    final_regression_template, final_regression_params, final_inner_r2 = (
+        _tune_regression_candidate(
+            regression_name,
+            selected_regression["template"],
+            X.reset_index(drop=True),
+            y_reg,
+            groups,
+            n_splits,
+            search_profile,
+        )
+    )
+    regression_model = final_regression_template.fit(X, y_reg)
     _log(log_func, f"Classification champion: {classification_name}; fitting on all real wafers...")
     classification_model = clone(selected_classification["template"]).fit(X, y_cls)
 
@@ -643,14 +872,26 @@ def train_equipment_models(
     predictions["dataset_version"] = dataset.provenance["dataset_version"]
 
     comparison = {
-        "regression": {name: run["metrics"] for name, run in regression_runs.items()},
+        "regression": {
+            name: {**run["metrics"], "nested_tuning": run["tuning"]}
+            for name, run in regression_runs.items()
+        },
         "classification": {name: run["metrics"] for name, run in classification_runs.items()},
     }
     metrics = {
         "validation": "StratifiedGroupKFold by manufacturing lot",
         "n_splits": n_splits,
         "selected_features": selected_features,
+        "regression_search_profile": search_profile,
+        "agentic_controller": agentic_decision or {
+            "enabled": False,
+            "used_agent": False,
+            "status": "not_requested",
+        },
         "regression_champion": regression_name,
+        "regression_selection_metric": "highest nested lot-grouped out-of-fold r2",
+        "regression_final_parameters": final_regression_params,
+        "regression_final_inner_grouped_r2": final_inner_r2,
         "classification_champion": classification_name,
         "regression": selected_regression["metrics"],
         "classification": selected_classification_metrics,

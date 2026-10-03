@@ -13,6 +13,10 @@ import streamlit as st
 from waferpulse.config import WaferPulsePaths
 from waferpulse.core.data_lanes import BOSCH_PLASMA_ETCH
 from waferpulse.dashboard.components import render_data_lane_notice
+from waferpulse.agents.groq_model_selection_agent import (
+    DEFAULT_MAX_AGENT_ITERATIONS,
+    choose_search_profile_from_summary,
+)
 
 DEFAULT_RESEARCH_THRESHOLD = 44.0
 ZENODO_RECORD_URL = "https://zenodo.org/records/17122442"
@@ -264,13 +268,40 @@ def _render_explainability(output_dir: Path) -> None:
             )
 
 
-def _run_full_benchmark(paths: WaferPulsePaths, refresh_cache: bool, threshold: float) -> None:
+def _run_full_benchmark(
+    paths: WaferPulsePaths,
+    refresh_cache: bool,
+    threshold: float,
+    *,
+    use_agentic_controller: bool,
+    groq_api_key: str,
+    max_agent_iterations: int,
+) -> None:
     try:
         from waferpulse.experiments.bosch_plasma_etch_benchmark import run as run_regression
         from waferpulse.experiments.bosch_response_then_classify_benchmark import run as run_classification
 
+        existing = _read_json(paths.bosch_output / "summary.json") or {}
+        dataset_summary = existing.get("dataset", {})
+        decision = choose_search_profile_from_summary(
+            {
+                "samples": int(dataset_summary.get("matched_wafers", 0)),
+                "features": "Bosch process-summary features",
+                "manufacturing_lots": int(dataset_summary.get("lots", 0)),
+                "task": "wafer-average and spatial silicon-etch regression",
+            },
+            enabled=use_agentic_controller,
+            api_key=groq_api_key or None,
+            max_iterations=max_agent_iterations,
+        )
         with st.spinner("Running complete Bosch benchmark suite (Regression + Defect Screening)..."):
-            run_regression(paths.bosch_data, paths.bosch_output, refresh_cache=refresh_cache)
+            run_regression(
+                paths.bosch_data,
+                paths.bosch_output,
+                refresh_cache=refresh_cache,
+                search_profile=decision.search_profile,
+                agentic_decision=decision.as_dict(),
+            )
             run_classification(paths.bosch_data, paths.bosch_classification_output, threshold)
         st.success("Bosch benchmark suite rebuilt successfully.")
     except FileNotFoundError:
@@ -312,13 +343,41 @@ def render_bosch_plasma_etch_page(
         help="Research rule only; the public dataset provides no factory limit.",
     )
     refresh_cache = sidebar.checkbox("Rebuild process-feature cache", value=False)
+    use_agentic_controller = sidebar.checkbox(
+        "Groq agentic AutoML planner",
+        value=False,
+        key="bosch_agentic_automl",
+        help="Falls back to the balanced Bosch benchmark on any Groq/CrewAI failure.",
+    )
+    max_agent_iterations = sidebar.slider(
+        "Maximum agent iterations",
+        1,
+        8,
+        DEFAULT_MAX_AGENT_ITERATIONS,
+        key="bosch_agent_iterations",
+        disabled=not use_agentic_controller,
+    )
+    groq_api_key = sidebar.text_input(
+        "Groq API key",
+        type="password",
+        key="bosch_groq_api_key",
+        disabled=not use_agentic_controller,
+        help="Leave blank to use GROQ_API_KEY.",
+    )
 
     if st.button(
         "⚡ Re-Run Complete Bosch Benchmark Suite (Regression & Screening)",
         type="primary",
         use_container_width=True,
     ):
-        _run_full_benchmark(paths, refresh_cache, threshold)
+        _run_full_benchmark(
+            paths,
+            refresh_cache,
+            threshold,
+            use_agentic_controller=use_agentic_controller,
+            groq_api_key=groq_api_key,
+            max_agent_iterations=max_agent_iterations,
+        )
 
     summary = _read_json(paths.bosch_output / "summary.json")
     metrics = _read_metrics(paths.bosch_output / "metrics.csv")

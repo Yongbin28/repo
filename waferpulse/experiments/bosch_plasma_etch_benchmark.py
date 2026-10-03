@@ -203,7 +203,17 @@ def coordinate_features(frame: pd.DataFrame) -> pd.DataFrame:
     )
 
 
-def model_candidates(feature_count: int) -> Mapping[str, Pipeline]:
+def model_candidates(
+    feature_count: int,
+    search_profile: str = "balanced",
+) -> Mapping[str, Pipeline]:
+    if search_profile not in {"conservative", "balanced", "extensive"}:
+        raise ValueError(f"Unknown Bosch search profile: {search_profile}")
+    forest_estimators = {"conservative": 80, "balanced": 120, "extensive": 260}[search_profile]
+    forest_leaf = {"conservative": 5, "balanced": 2, "extensive": 1}[search_profile]
+    forest_depth = {"conservative": 8, "balanced": None, "extensive": None}[search_profile]
+    boost_estimators = {"conservative": 100, "balanced": 220, "extensive": 360}[search_profile]
+    boost_depth = {"conservative": 3, "balanced": 4, "extensive": 6}[search_profile]
     selected = max(1, min(80, feature_count))
     preprocessing = [
         ("imputer", SimpleImputer(strategy="median")),
@@ -252,8 +262,9 @@ def model_candidates(feature_count: int) -> Mapping[str, Pipeline]:
                 (
                     "model",
                     RandomForestRegressor(
-                        n_estimators=120,
-                        min_samples_leaf=2,
+                        n_estimators=forest_estimators,
+                        min_samples_leaf=forest_leaf,
+                        max_depth=forest_depth,
                         max_features=0.7,
                         n_jobs=1,
                         random_state=SEED,
@@ -267,8 +278,9 @@ def model_candidates(feature_count: int) -> Mapping[str, Pipeline]:
                 (
                     "model",
                     ExtraTreesRegressor(
-                        n_estimators=120,
-                        min_samples_leaf=2,
+                        n_estimators=forest_estimators,
+                        min_samples_leaf=forest_leaf,
+                        max_depth=forest_depth,
                         max_features=0.7,
                         n_jobs=1,
                         random_state=SEED,
@@ -283,9 +295,9 @@ def model_candidates(feature_count: int) -> Mapping[str, Pipeline]:
                 (
                     "model",
                     HistGradientBoostingRegressor(
-                        max_iter=150,
+                        max_iter=max(80, boost_estimators),
                         learning_rate=0.05,
-                        max_depth=4,
+                        max_depth=boost_depth,
                         min_samples_leaf=5,
                         random_state=SEED,
                     ),
@@ -298,9 +310,9 @@ def model_candidates(feature_count: int) -> Mapping[str, Pipeline]:
                 (
                     "model",
                     XGBRegressor(
-                        n_estimators=220,
+                        n_estimators=boost_estimators,
                         learning_rate=0.04,
-                        max_depth=4,
+                        max_depth=boost_depth,
                         min_child_weight=5,
                         subsample=0.8,
                         colsample_bytree=0.7,
@@ -318,7 +330,7 @@ def model_candidates(feature_count: int) -> Mapping[str, Pipeline]:
                 (
                     "model",
                     LGBMRegressor(
-                        n_estimators=220,
+                        n_estimators=boost_estimators,
                         learning_rate=0.04,
                         num_leaves=15,
                         min_child_samples=15,
@@ -361,7 +373,10 @@ def _metrics(actual: np.ndarray, predicted: np.ndarray) -> Dict[str, float]:
     }
 
 
-def benchmark(dataset: BoschDataset) -> tuple[pd.DataFrame, pd.DataFrame]:
+def benchmark(
+    dataset: BoschDataset,
+    search_profile: str = "balanced",
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     process_columns = [column for column in dataset.process if column != "experiment_key"]
     points = dataset.measurements.merge(
         dataset.process, on="experiment_key", how="inner", validate="many_to_one"
@@ -380,7 +395,7 @@ def benchmark(dataset: BoschDataset) -> tuple[pd.DataFrame, pd.DataFrame]:
     for target_name in TARGETS:
         actual = points[target_name].to_numpy(dtype=float)
         for feature_set, features in feature_sets.items():
-            candidates = model_candidates(features.shape[1])
+            candidates = model_candidates(features.shape[1], search_profile)
             if feature_set != "process_plus_coordinate" or target_name != "si_etch":
                 candidates = {
                     name: candidates[name]
@@ -428,7 +443,7 @@ def benchmark(dataset: BoschDataset) -> tuple[pd.DataFrame, pd.DataFrame]:
     wafer_groups = wafer_targets["lot_number"].to_numpy()
     for target_name in TARGETS:
         actual = wafer_targets[target_name].to_numpy(dtype=float)
-        candidates = model_candidates(wafer_features.shape[1])
+        candidates = model_candidates(wafer_features.shape[1], search_profile)
         if target_name != "si_etch":
             candidates = {
                 name: candidates[name]
@@ -470,9 +485,15 @@ def benchmark(dataset: BoschDataset) -> tuple[pd.DataFrame, pd.DataFrame]:
     return pd.DataFrame(results), pd.concat(predictions, ignore_index=True)
 
 
-def run(root: Path, output: Path, refresh_cache: bool = False) -> pd.DataFrame:
+def run(
+    root: Path,
+    output: Path,
+    refresh_cache: bool = False,
+    search_profile: str = "balanced",
+    agentic_decision: Mapping[str, Any] | None = None,
+) -> pd.DataFrame:
     dataset = load_dataset(root, refresh_cache=refresh_cache)
-    results, predictions = benchmark(dataset)
+    results, predictions = benchmark(dataset, search_profile)
     output.mkdir(parents=True, exist_ok=True)
 
     # Attach algorithm category from Report Table 3-5
@@ -593,6 +614,12 @@ def run(root: Path, output: Path, refresh_cache: bool = False) -> pd.DataFrame:
             "No identifiers, dates, lots, wafer numbers, or metrology inputs."
         ),
         "dataset": dict(dataset.metadata),
+        "regression_search_profile": search_profile,
+        "agentic_controller": dict(agentic_decision or {
+            "enabled": False,
+            "used_agent": False,
+            "status": "not_requested",
+        }),
         "best_by_task_target": (
             results.sort_values("r2", ascending=False)
             .groupby(["task", "target"], as_index=False)

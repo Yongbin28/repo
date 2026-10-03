@@ -30,6 +30,9 @@ class PageConfiguration:
     folds: int
     selected_features: int
     estimators: int
+    use_agentic_controller: bool
+    max_agent_iterations: int
+    groq_api_key: str
 
 
 def _render_configuration(sidebar: Any) -> PageConfiguration:
@@ -54,12 +57,38 @@ def _render_configuration(sidebar: Any) -> PageConfiguration:
             "Sensors above this source-format rate remain excluded from the reliable lane."
         ),
     )
+    use_agentic_controller = sidebar.checkbox(
+        "Groq agentic AutoML planner",
+        value=False,
+        help=(
+            "Uses CrewAI with a bounded Groq planning step. Any missing dependency, "
+            "invalid response, timeout, rate limit, or iteration-limit failure falls "
+            "back to the deterministic balanced workflow."
+        ),
+    )
+    max_agent_iterations = sidebar.slider(
+        "Maximum agent iterations",
+        min_value=1,
+        max_value=8,
+        value=8,
+        disabled=not use_agentic_controller,
+    )
+    groq_api_key = sidebar.text_input(
+        "Groq API key",
+        type="password",
+        value="",
+        disabled=not use_agentic_controller,
+        help="Leave blank to use the GROQ_API_KEY environment variable.",
+    )
     return PageConfiguration(
         stage_mode=stage_mode,
         max_invalid_rate=invalid_percent / 100.0,
         folds=sidebar.slider("Lot-grouped validation folds", 3, 5, 3),
         selected_features=sidebar.slider("Selected temporal features", 40, 200, 60, 10),
-        estimators=sidebar.slider("Trees per candidate", 40, 200, 60, 20),
+        estimators=sidebar.slider("Trees / boosting iterations", 40, 200, 60, 20),
+        use_agentic_controller=use_agentic_controller,
+        max_agent_iterations=max_agent_iterations,
+        groq_api_key=groq_api_key,
     )
 
 
@@ -101,6 +130,9 @@ def _render_actions(
                     n_splits=config.folds,
                     selected_features=config.selected_features,
                     n_estimators=config.estimators,
+                    use_agentic_controller=config.use_agentic_controller,
+                    groq_api_key=config.groq_api_key or None,
+                    max_agent_iterations=config.max_agent_iterations,
                     log_func=ui_log,
                 )
             st.session_state[MODEL_STATE_KEY] = result
@@ -227,6 +259,12 @@ def _render_validation_metrics(result: Any) -> None:
         f"Regression champion: **{metrics['regression_champion']}** · Classification champion: "
         f"**{metrics['classification_champion']}** · {metrics['validation']} ({metrics['n_splits']} folds)."
     )
+    if metrics.get("regression_selection_metric"):
+        st.caption(
+            "Regression selection: highest nested lot-grouped out-of-fold R² across the "
+            "nine report algorithms. Tree growth and pruning parameters are selected only "
+            "inside each training fold."
+        )
     r1, r2, r3, c1, c2, c3 = st.columns(6)
     r1.metric("MAE", f"{regression['mae']:.4f}")
     r2.metric("RMSE", f"{regression['rmse']:.4f}")

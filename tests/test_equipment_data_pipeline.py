@@ -8,7 +8,11 @@ from equipment_data_pipeline import (
     _choose_recall_guardrail_threshold,
     load_equipment_dataset,
 )
-from waferpulse.tools.equipment_modeling import QualityHurdleForestBlendRegressor
+from waferpulse.tools.equipment_modeling import (
+    QualityHurdleForestBlendRegressor,
+    _make_regression_candidates,
+    _regression_parameter_grids,
+)
 from waferpulse.tools.equipment_data import load_equipment_trace_dataset
 
 
@@ -120,3 +124,39 @@ def test_quality_hurdle_forest_blend_fits_and_predicts() -> None:
     assert np.isfinite(prediction).all()
     assert set(relevance["task"]) == {"regression"}
     assert np.isclose(relevance["importance"].sum(), 1.0)
+
+
+def test_production_regression_candidates_match_report_nine_algorithms() -> None:
+    candidates = _make_regression_candidates(
+        selected_features=5,
+        random_state=42,
+        n_estimators=20,
+    )
+    assert list(candidates) == [
+        "Ridge",
+        "Lasso",
+        "ElasticNet",
+        "KNN",
+        "ExtraTrees",
+        "RandomForest",
+        "HistGBR",
+        "XGBoost",
+        "LightGBM",
+    ]
+
+
+def test_forest_search_tunes_growth_and_cost_complexity_pruning() -> None:
+    grids = _regression_parameter_grids()
+    for model_name in ("ExtraTrees", "RandomForest"):
+        assert {row["model__max_depth"] for row in grids[model_name]} == {8, 12, None}
+        assert {row["model__min_samples_leaf"] for row in grids[model_name]} == {2, 5}
+        assert {row["model__ccp_alpha"] for row in grids[model_name]} == {0.0, 0.0001}
+
+
+def test_search_profiles_are_bounded_and_balanced_remains_default() -> None:
+    balanced = _regression_parameter_grids()
+    conservative = _regression_parameter_grids("conservative")
+    extensive = _regression_parameter_grids("extensive")
+
+    assert len(conservative["RandomForest"]) < len(balanced["RandomForest"])
+    assert len(extensive["RandomForest"]) > len(balanced["RandomForest"])
