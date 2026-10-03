@@ -307,7 +307,8 @@ def _run_full_benchmark(
     except FileNotFoundError:
         st.info(
             "ℹ️ Verified pre-computed benchmark evidence is already loaded and displayed below. "
-            "Re-running from raw 5 Hz process streams requires the 2 GB Zenodo NetCDF files on a local GPU/workstation."
+            "Re-running requires the encoded Bosch process, dictionary, and downstream "
+            "measurement source files."
         )
     except Exception as exc:
         st.error("The Bosch benchmark suite could not run.")

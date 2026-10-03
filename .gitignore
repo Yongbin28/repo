@@ -45,6 +45,8 @@ ETS364B/
 *.keras
 
 # Whitelist lightweight demo sample lots and baseline models for cloud showcase
+!dataset/
+dataset/*
 !dataset/J750/
 !dataset/J750/DDR4SDRAM_MT40A1G8/
 !dataset/J750/DDR4SDRAM_MT40A1G8/ddr4_limits.csv
@@ -71,6 +73,13 @@ ETS364B/
 !dataset/J750/DDR5DRAM_MT41K256M16-MT/Model/merged_features_*.csv
 !dataset/J750/DDR5DRAM_MT41K256M16-MT/Model/model_results_*.csv
 !dataset/J750/DDR5DRAM_MT41K256M16-MT/Model/model_details_*.xlsx
+
+# Compact encoded Bosch source required for cloud feature extraction/retraining.
+!dataset/bosch_plasma_etch/
+dataset/bosch_plasma_etch/*
+!dataset/bosch_plasma_etch/Process_data.nc
+!dataset/bosch_plasma_etch/Dictionary_process.nc
+!dataset/bosch_plasma_etch/Si_Oxide_etch_89_points.csv
 
 # The only bundled model is independently verified on untouched PHM16 CMP
 # campaigns and is required by the production virtual-metrology page.

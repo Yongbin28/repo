@@ -188,7 +188,9 @@ Use the sidebar to select one of the three workspaces:
 ## Reproducing the Bosch plasma-etch benchmark
 
 Download the public source from [Zenodo record 17122442](https://zenodo.org/records/17122442)
-and place the required Bosch files under `data/bosch_plasma_etch/`:
+and place the required Bosch files under `data/bosch_plasma_etch/`. The compact
+encoded copies are bundled under `dataset/bosch_plasma_etch/` for Streamlit
+Cloud end-to-end feature extraction and retraining:
 
 ```text
 data/bosch_plasma_etch/
