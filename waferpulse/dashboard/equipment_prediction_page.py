@@ -61,7 +61,7 @@ def _render_configuration(sidebar: Any) -> PageConfiguration:
         "Groq agentic AutoML planner",
         value=False,
         help=(
-            "Uses CrewAI with a bounded Groq planning step. Any missing dependency, "
+            "Uses a bounded Groq planning step. Any missing credential, "
             "invalid response, timeout, rate limit, or iteration-limit failure falls "
             "back to the deterministic balanced workflow."
         ),

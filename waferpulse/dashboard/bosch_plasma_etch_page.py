@@ -347,7 +347,7 @@ def render_bosch_plasma_etch_page(
         "Groq agentic AutoML planner",
         value=False,
         key="bosch_agentic_automl",
-        help="Falls back to the balanced Bosch benchmark on any Groq/CrewAI failure.",
+        help="Falls back to the balanced Bosch benchmark on any Groq API failure.",
     )
     max_agent_iterations = sidebar.slider(
         "Maximum agent iterations",
