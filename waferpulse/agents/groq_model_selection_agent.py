@@ -98,6 +98,13 @@ def choose_search_profile_from_summary(
 
     effective_key = (api_key or os.getenv("GROQ_API_KEY", "")).strip()
     if not effective_key:
+        try:
+            import streamlit as st
+
+            effective_key = str(st.secrets.get("GROQ_API_KEY", "")).strip()
+        except Exception:
+            effective_key = ""
+    if not effective_key:
         return fallback("GROQ_API_KEY is unavailable.")
 
     try:

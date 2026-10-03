@@ -168,6 +168,17 @@ python -m streamlit run streamlit_app.py
 
 Streamlit normally opens the application at `http://localhost:8501`.
 
+Groq AutoML planning is enabled automatically. Configure the key once instead
+of entering it in the dashboard:
+
+- Streamlit Community Cloud: App settings → **Secrets**, then add
+  `GROQ_API_KEY = "your-key"`.
+- Local PowerShell: set `$env:GROQ_API_KEY = "your-key"` before starting the app,
+  or put the same entry in `.streamlit/secrets.toml` (this file is git-ignored).
+
+If Groq is unavailable or rate-limited, the application automatically uses the
+balanced deterministic model-search workflow.
+
 Use the sidebar to select one of the three workspaces:
 
 1. **Model Preparation Pipeline**

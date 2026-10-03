@@ -6,6 +6,7 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 pytest-cache-files-*/
+.streamlit/secrets.toml
 
 # JavaScript/browser tooling
 node_modules/

@@ -342,27 +342,9 @@ def render_bosch_plasma_etch_page(
         step=0.25,
         help="Research rule only; the public dataset provides no factory limit.",
     )
-    refresh_cache = sidebar.checkbox("Rebuild process-feature cache", value=False)
-    use_agentic_controller = sidebar.checkbox(
-        "Groq agentic AutoML planner",
-        value=False,
-        key="bosch_agentic_automl",
-        help="Falls back to the balanced Bosch benchmark on any Groq API failure.",
-    )
-    max_agent_iterations = sidebar.slider(
-        "Maximum agent iterations",
-        1,
-        8,
-        DEFAULT_MAX_AGENT_ITERATIONS,
-        key="bosch_agent_iterations",
-        disabled=not use_agentic_controller,
-    )
-    groq_api_key = sidebar.text_input(
-        "Groq API key",
-        type="password",
-        key="bosch_groq_api_key",
-        disabled=not use_agentic_controller,
-        help="Leave blank to use GROQ_API_KEY.",
+    sidebar.caption(
+        "Groq AutoML planning is automatic (maximum 8 decisions). Cached process "
+        "features are reused automatically and rebuilt only when missing."
     )
 
     if st.button(
@@ -372,11 +354,11 @@ def render_bosch_plasma_etch_page(
     ):
         _run_full_benchmark(
             paths,
-            refresh_cache,
+            False,
             threshold,
-            use_agentic_controller=use_agentic_controller,
-            groq_api_key=groq_api_key,
-            max_agent_iterations=max_agent_iterations,
+            use_agentic_controller=True,
+            groq_api_key="",
+            max_agent_iterations=DEFAULT_MAX_AGENT_ITERATIONS,
         )
 
     summary = _read_json(paths.bosch_output / "summary.json")

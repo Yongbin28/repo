@@ -30,9 +30,6 @@ class PageConfiguration:
     folds: int
     selected_features: int
     estimators: int
-    use_agentic_controller: bool
-    max_agent_iterations: int
-    groq_api_key: str
 
 
 def _render_configuration(sidebar: Any) -> PageConfiguration:
@@ -57,28 +54,9 @@ def _render_configuration(sidebar: Any) -> PageConfiguration:
             "Sensors above this source-format rate remain excluded from the reliable lane."
         ),
     )
-    use_agentic_controller = sidebar.checkbox(
-        "Groq agentic AutoML planner",
-        value=False,
-        help=(
-            "Uses a bounded Groq planning step. Any missing credential, "
-            "invalid response, timeout, rate limit, or iteration-limit failure falls "
-            "back to the deterministic balanced workflow."
-        ),
-    )
-    max_agent_iterations = sidebar.slider(
-        "Maximum agent iterations",
-        min_value=1,
-        max_value=8,
-        value=8,
-        disabled=not use_agentic_controller,
-    )
-    groq_api_key = sidebar.text_input(
-        "Groq API key",
-        type="password",
-        value="",
-        disabled=not use_agentic_controller,
-        help="Leave blank to use the GROQ_API_KEY environment variable.",
+    sidebar.caption(
+        "Groq AutoML planning is automatic (maximum 8 decisions) and safely falls "
+        "back to the balanced workflow when unavailable."
     )
     return PageConfiguration(
         stage_mode=stage_mode,
@@ -86,9 +64,6 @@ def _render_configuration(sidebar: Any) -> PageConfiguration:
         folds=sidebar.slider("Lot-grouped validation folds", 3, 5, 3),
         selected_features=sidebar.slider("Selected temporal features", 40, 200, 60, 10),
         estimators=sidebar.slider("Trees / boosting iterations", 40, 200, 60, 20),
-        use_agentic_controller=use_agentic_controller,
-        max_agent_iterations=max_agent_iterations,
-        groq_api_key=groq_api_key,
     )
 
 
@@ -130,9 +105,9 @@ def _render_actions(
                     n_splits=config.folds,
                     selected_features=config.selected_features,
                     n_estimators=config.estimators,
-                    use_agentic_controller=config.use_agentic_controller,
-                    groq_api_key=config.groq_api_key or None,
-                    max_agent_iterations=config.max_agent_iterations,
+                    use_agentic_controller=True,
+                    groq_api_key=None,
+                    max_agent_iterations=8,
                     log_func=ui_log,
                 )
             st.session_state[MODEL_STATE_KEY] = result

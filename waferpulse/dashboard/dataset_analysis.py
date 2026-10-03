@@ -505,32 +505,12 @@ def render_uploaded_dataset_analysis(sidebar: Any | None = None) -> None:
         )
         return
 
-    use_agentic_controller = False
-    max_agent_iterations = DEFAULT_MAX_AGENT_ITERATIONS
-    groq_api_key = ""
     if sidebar is not None:
         sidebar.markdown("---")
         sidebar.subheader("Local AutoML")
-        use_agentic_controller = sidebar.checkbox(
-            "Groq agentic AutoML planner",
-            value=False,
-            key="local_agentic_automl",
-            help="Falls back to the balanced nine-model workflow on any agent failure.",
-        )
-        max_agent_iterations = sidebar.slider(
-            "Maximum agent iterations",
-            1,
-            8,
-            DEFAULT_MAX_AGENT_ITERATIONS,
-            key="local_agent_iterations",
-            disabled=not use_agentic_controller,
-        )
-        groq_api_key = sidebar.text_input(
-            "Groq API key",
-            type="password",
-            key="local_groq_api_key",
-            disabled=not use_agentic_controller,
-            help="Leave blank to use GROQ_API_KEY.",
+        sidebar.caption(
+            "Groq AutoML planning runs automatically with a maximum of 8 decisions; "
+            "the balanced workflow is the automatic fallback."
         )
     try:
         with st.spinner(f"Reading {uploaded.name}..."):
@@ -577,9 +557,9 @@ def render_uploaded_dataset_analysis(sidebar: Any | None = None) -> None:
                 "manufacturing_lots": group_count,
                 "task": f"local regression target {target_column}",
             },
-            enabled=use_agentic_controller,
-            api_key=groq_api_key or None,
-            max_iterations=max_agent_iterations,
+            enabled=True,
+            api_key=None,
+            max_iterations=DEFAULT_MAX_AGENT_ITERATIONS,
         )
         try:
             with st.spinner("Running local nine-model benchmark..."):
