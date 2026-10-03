@@ -8,84 +8,94 @@
     "lots": 10,
     "measurement_rows": 7832
   },
+  "regression_search_profile": "conservative",
+  "agentic_controller": {
+    "enabled": true,
+    "used_agent": true,
+    "search_profile": "conservative",
+    "model": "openai/gpt-oss-120b",
+    "max_iterations": 8,
+    "status": "success",
+    "reason": "Only 88 samples with 312 features creates a high risk of overfitting; a conservative search limits model complexity and runs quickly, better suited for this small, high\u2011dimensional dataset."
+  },
   "best_by_task_target": [
     {
       "task": "map_point",
       "target": "oxide_etch",
-      "feature_set": "coordinate_only",
+      "feature_set": "process_plus_coordinate",
       "model": "extra_trees",
       "rows": 7832,
       "groups": 10,
-      "r2": 0.059012009677239075,
-      "rmse": 0.07499181666119883,
-      "mae": 0.051560472085121774,
+      "r2": 0.1023097095939609,
+      "rmse": 0.07324619991789533,
+      "mae": 0.05282534372258398,
       "category": "Bagging Ensemble"
     },
     {
       "task": "map_point",
       "target": "si_etch",
       "feature_set": "process_plus_coordinate",
-      "model": "lightgbm",
+      "model": "random_forest",
       "rows": 7832,
       "groups": 10,
-      "r2": 0.9924577011546956,
-      "rmse": 0.31348985247021766,
-      "mae": 0.16771141058050357,
-      "category": "Boosting Ensemble"
+      "r2": 0.9900425925136996,
+      "rmse": 0.36020087160585906,
+      "mae": 0.2256532735648406,
+      "category": "Bagging Ensemble"
     },
     {
       "task": "wafer_mean",
       "target": "oxide_etch",
       "feature_set": "process_only",
-      "model": "ridge",
+      "model": "extra_trees",
       "rows": 88,
       "groups": 10,
-      "r2": 0.4318597584142744,
-      "rmse": 0.03270628214311949,
-      "mae": 0.02511777081936829,
-      "category": "Regularised Linear"
+      "r2": 0.10202565628652849,
+      "rmse": 0.04111832049858792,
+      "mae": 0.032284897900602245,
+      "category": "Bagging Ensemble"
     },
     {
       "task": "wafer_mean",
       "target": "si_etch",
       "feature_set": "process_only",
-      "model": "lasso",
+      "model": "lightgbm",
       "rows": 88,
       "groups": 10,
-      "r2": 0.8837373463060553,
-      "rmse": 0.13625921066275537,
-      "mae": 0.10912335641009996,
-      "category": "Regularised Linear"
+      "r2": 0.7874044625738486,
+      "rmse": 0.18425650326099008,
+      "mae": 0.1527160324888304,
+      "category": "Boosting Ensemble"
     }
   ],
   "top_3_wafer_models": [
     {
       "Rank": 1,
-      "Category": "Regularised Linear",
-      "Model": "Lasso",
-      "R2": 0.8837,
-      "RMSE": 0.1363,
-      "MAE": 0.1091,
+      "Category": "Boosting Ensemble",
+      "Model": "Lightgbm",
+      "R2": 0.7874,
+      "RMSE": 0.1843,
+      "MAE": 0.1527,
       "Wafers": 88,
       "Lots": 10
     },
     {
       "Rank": 2,
-      "Category": "Regularised Linear",
-      "Model": "Elastic Net",
-      "R2": 0.8834,
-      "RMSE": 0.1364,
-      "MAE": 0.1096,
+      "Category": "Boosting Ensemble",
+      "Model": "Xgboost",
+      "R2": 0.7852,
+      "RMSE": 0.1852,
+      "MAE": 0.1569,
       "Wafers": 88,
       "Lots": 10
     },
     {
       "Rank": 3,
       "Category": "Boosting Ensemble",
-      "Model": "Lightgbm",
-      "R2": 0.8324,
-      "RMSE": 0.1636,
-      "MAE": 0.1291,
+      "Model": "Hist Gradient Boosting",
+      "R2": 0.7496,
+      "RMSE": 0.2,
+      "MAE": 0.1598,
       "Wafers": 88,
       "Lots": 10
     }
