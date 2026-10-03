@@ -80,6 +80,7 @@ dataset/bosch_plasma_etch/*
 !dataset/bosch_plasma_etch/Process_data.nc
 !dataset/bosch_plasma_etch/Dictionary_process.nc
 !dataset/bosch_plasma_etch/Si_Oxide_etch_89_points.csv
+!dataset/bosch_plasma_etch/bosch_process_wafer_features.csv
 
 # The only bundled model is independently verified on untouched PHM16 CMP
 # campaigns and is required by the production virtual-metrology page.

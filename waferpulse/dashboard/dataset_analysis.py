@@ -414,7 +414,7 @@ def render_bosch_source_analysis(current_dir: Path) -> None:
         ("Dictionary_process.nc", "NetCDF decoding dictionary", True),
         ("Si_Oxide_etch_89_points.csv", "89-point wafer metrology", True),
         ("Lot_status.xlsx", "lot/conditioning metadata", False),
-        ("bosch_process_wafer_features.parquet", "local derived process features", False),
+        ("bosch_process_wafer_features.csv", "cloud-ready derived process features", True),
     ]
     st.markdown(f"[Open the source dataset on Zenodo]({ZENODO_RECORD_URL})")
     _render_inventory(
@@ -439,7 +439,7 @@ def render_bosch_source_analysis(current_dir: Path) -> None:
             "si_etch",
         ),
         "Engineered process features": (
-            data_dir / "bosch_process_wafer_features.parquet",
+            data_dir / "bosch_process_wafer_features.csv",
             None,
         ),
         "Lot status and conditioning": (data_dir / "Lot_status.xlsx", None),

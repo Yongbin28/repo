@@ -151,12 +151,15 @@ def load_dataset(root: Path, refresh_cache: bool = False) -> BoschDataset:
     if missing:
         raise FileNotFoundError(f"Missing BOSCH files: {missing}")
 
-    cache = root / "bosch_process_wafer_features.parquet"
+    cache = root / "bosch_process_wafer_features.csv"
+    legacy_cache = root / "bosch_process_wafer_features.parquet"
     if cache.is_file() and not refresh_cache:
-        process = pd.read_parquet(cache)
+        process = pd.read_csv(cache)
+    elif legacy_cache.is_file() and not refresh_cache:
+        process = pd.read_parquet(legacy_cache)
     else:
         process = extract_process_features(required["process"], required["dictionary"])
-        process.to_parquet(cache, index=False)
+        process.to_csv(cache, index=False)
     numeric_columns = process.columns.difference(["experiment_key"])
     sufficiently_observed = [
         column for column in numeric_columns if process[column].notna().sum() >= 20
