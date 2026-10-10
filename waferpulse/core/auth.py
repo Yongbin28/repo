@@ -143,13 +143,4 @@ def render_auth_gate() -> bool:
                     else:
                         st.error("Invalid username or password. Please try again.")
 
-        with st.expander("ℹ️ Demo Sign-in Credentials", expanded=False):
-            st.markdown(
-                """
-                - **Administrator:** `admin` / `admin123`
-                - **Process Engineer:** `engineer` / `engineer123`
-                - **Quality Auditor:** `auditor` / `auditor123`
-                """
-            )
-
     return False
