@@ -300,6 +300,29 @@ def find_limit_file(csv_path: Path, context_root: Optional[Path] = None) -> Opti
             
     return None
 
+def find_product_limit_file(csv_path: Path, dataset_root: Path, generic: str,
+                            partname: str = "") -> Optional[Path]:
+    """Resolve uploaded wafer limits without borrowing another product's specs."""
+    clean_stem = csv_path.stem.split('.')[0]
+    for family_dir in sorted(dataset_root.iterdir()) if dataset_root.is_dir() else []:
+        if not family_dir.is_dir():
+            continue
+        product_names = [f"{generic}_{partname}", generic] if partname else [generic]
+        for product_name in product_names:
+            product_dir = family_dir / product_name
+            if not product_dir.is_dir():
+                continue
+            probe_dir = product_dir / "T&P_Decrypted"
+            if probe_dir.is_dir():
+                matching = sorted(probe_dir.rglob(f"*{clean_stem}*_limits.csv"))
+                if matching:
+                    return matching[0]
+            shared = sorted(product_dir.glob("*_limits.csv"))
+            if shared:
+                return shared[0]
+    return None
+
+
 def parse_limit_file(path: Path, log_func=None) -> Dict[str, Tuple[Optional[float], Optional[float]]]:
     """Parse limits CSV into mapping of Test# -> (Min, Max).
     

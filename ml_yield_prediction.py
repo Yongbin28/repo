@@ -202,29 +202,13 @@ class YieldPredictor:
         # Limit lookup
         lim_path = ml_compute_statistic.find_limit_file(csv_path)
         
-        # Fallback: if csv_path is in a temp dir (e.g. uploaded file), search the
-        # generic's dataset directories for a matching limit file.
-        if not lim_path and DATASET_ROOT.exists():
-            csv_stem = csv_path.stem
-            clean_stem = csv_stem.split('.')[0]
-            
-            for family_dir in DATASET_ROOT.iterdir():
-                if not family_dir.is_dir():
-                    continue
-                for generic_dir in family_dir.iterdir():
-                    if generic_dir.is_dir() and (generic_dir.name == self.generic or generic_dir.name.startswith(self.generic + "_")):
-                        tp_dir = generic_dir / "T&P_Decrypted"
-                        if tp_dir.exists():
-                            for lf in tp_dir.rglob(f"*{clean_stem}*_limits.csv"):
-                                lim_path = lf
-                                break
-                            if not lim_path:
-                                for lf in tp_dir.rglob("*_limits.csv"):
-                                    lim_path = lf
-                                    break
-                        if lim_path: break
-                if lim_path: break
-        
+        # Uploaded wafers lose their original folder context. Resolve specs
+        # from the selected product, including its shared limits CSV.
+        if not lim_path:
+            lim_path = ml_compute_statistic.find_product_limit_file(
+                csv_path, DATASET_ROOT, self.generic, self.partname
+            )
+
         lim_map = ml_compute_statistic.parse_limit_file(lim_path, log_func=self.log_func) if lim_path else {}
         if lim_map:
             unique_tests = len([k for k in lim_map.keys() if not k.islower()]) or len(lim_map) // 2
