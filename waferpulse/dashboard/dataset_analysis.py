@@ -194,14 +194,14 @@ def render_dataframe_analysis(
     c5.metric("Duplicate rows", f"{profile['duplicate_rows']:,}")
 
     st.markdown("#### Data preview")
-    st.dataframe(frame.head(200), use_container_width=True, hide_index=True, height=340)
+    st.dataframe(frame.head(200), width="stretch", hide_index=True, height=340)
     st.caption("The preview is limited to 200 rows; metrics describe the complete loaded table.")
 
     columns = _column_profile(frame)
     with st.expander("Column dictionary and missingness", expanded=False):
         st.dataframe(
             columns.style.format({"missing_rate": "{:.2%}"}),
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
             height=360,
         )
@@ -216,7 +216,7 @@ def render_dataframe_analysis(
                 labels={"missing_rate": "Missing rate", "column": "Column"},
             )
             figure.update_xaxes(tickformat=".0%")
-            st.plotly_chart(figure, use_container_width=True)
+            st.plotly_chart(figure, width="stretch")
 
     numeric = analyzable_numeric_frame(frame)
     left, right = st.columns(2)
@@ -237,7 +237,7 @@ def render_dataframe_analysis(
                 marginal="box",
                 title=f"Distribution of {selected}",
             )
-            st.plotly_chart(figure, use_container_width=True)
+            st.plotly_chart(figure, width="stretch")
             selected_values = numeric[selected].dropna()
             st.caption(
                 f"Valid values: {len(selected_values):,} · "
@@ -264,7 +264,7 @@ def render_dataframe_analysis(
             target_values = numeric[target].dropna()
             st.plotly_chart(
                 px.histogram(target_values, x=target, nbins=35, title=f"Target: {target}"),
-                use_container_width=True,
+                width="stretch",
             )
             correlations = (
                 numeric.corrwith(numeric[target])
@@ -282,7 +282,7 @@ def render_dataframe_analysis(
                     correlations[["feature", "correlation"]].style.format(
                         {"correlation": "{:.3f}"}
                     ),
-                    use_container_width=True,
+                    width="stretch",
                     hide_index=True,
                 )
                 st.caption("Correlation is exploratory association, not causal importance.")
@@ -299,7 +299,7 @@ def render_dataframe_analysis(
             )
             st.plotly_chart(
                 px.bar(counts, x=target, y="rows", title=f"Class/value balance: {target}"),
-                use_container_width=True,
+                width="stretch",
             )
 
 
@@ -317,7 +317,7 @@ def read_local_table(path: Path) -> pd.DataFrame:
 
 def _render_inventory(rows: list[dict[str, Any]]) -> None:
     inventory = pd.DataFrame(rows)
-    st.dataframe(inventory, use_container_width=True, hide_index=True)
+    st.dataframe(inventory, width="stretch", hide_index=True)
 
 
 def render_equipment_source_analysis(current_dir: Path) -> None:
@@ -399,7 +399,7 @@ def render_equipment_source_analysis(current_dir: Path) -> None:
                     color="sensor",
                     title=f"{path.stem}: {lot} / wafer {wafer}",
                 ),
-                use_container_width=True,
+                width="stretch",
             )
 
 
@@ -483,7 +483,7 @@ def render_bosch_source_analysis(current_dir: Path) -> None:
                 title=f"Measured silicon etch: {experiment}",
                 labels={"si_etch": "Si etch"},
             ),
-            use_container_width=True,
+            width="stretch",
         )
 
 
@@ -547,7 +547,7 @@ def render_uploaded_dataset_analysis(sidebar: Any | None = None) -> None:
         key="local_automl_group",
         help="Select lot, batch, wafer family, or another leakage boundary when available.",
     )
-    if st.button("Run Local Nine-Model AutoML", type="primary", use_container_width=True):
+    if st.button("Run Local Nine-Model AutoML", type="primary", width="stretch"):
         group_column = None if group_choice == "No group column" else group_choice
         group_count = int(frame[group_column].nunique()) if group_column else 0
         decision = choose_search_profile_from_summary(
@@ -589,7 +589,7 @@ def render_uploaded_dataset_analysis(sidebar: Any | None = None) -> None:
             f"{metadata['validation']} · profile {metadata['search_profile']} · "
             f"agent status {decision['status']}. The uploaded file remains in memory only."
         )
-        st.dataframe(metrics, use_container_width=True, hide_index=True)
+        st.dataframe(metrics, width="stretch", hide_index=True)
         champion_predictions = predictions.loc[
             predictions["model"].eq(champion["model"])
         ]
@@ -600,5 +600,5 @@ def render_uploaded_dataset_analysis(sidebar: Any | None = None) -> None:
                 y="predicted",
                 title="Champion out-of-fold predictions",
             ),
-            use_container_width=True,
+            width="stretch",
         )

@@ -85,7 +85,7 @@ def _render_benchmark(paths: WaferPulsePaths) -> None:
         development[["model", "r2", "rmse", "mae"]].style.format(
             {"r2": "{:.4f}", "rmse": "{:.3f}", "mae": "{:.3f}"}
         ),
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
     )
     figure = px.bar(
@@ -96,7 +96,7 @@ def _render_benchmark(paths: WaferPulsePaths) -> None:
         title="Grouped development R² by algorithm",
     )
     figure.add_vline(x=0.8, line_dash="dash", line_color="#c62828")
-    st.plotly_chart(figure, use_container_width=True)
+    st.plotly_chart(figure, width="stretch")
 
 
 def _run_prediction(frame: pd.DataFrame, model_path: Path) -> None:
@@ -117,7 +117,7 @@ def _render_prediction_result(result: CMPPredictionResult) -> None:
             "AVG_REMOVAL_RATE was present in the uploaded file but was excluded before "
             "feature extraction and prediction."
         )
-    st.dataframe(result.predictions, use_container_width=True, hide_index=True)
+    st.dataframe(result.predictions, width="stretch", hide_index=True)
     st.download_button(
         "Download CMP virtual-metrology predictions",
         data=result.predictions.to_csv(index=False).encode("utf-8"),
@@ -160,7 +160,7 @@ def render_cmp_virtual_metrology_page(current_dir: Path, sidebar: Any) -> None:
     if upload_col.button(
         "Predict uploaded CMP traces",
         type="primary",
-        use_container_width=True,
+        width="stretch",
         disabled=not uploaded,
     ):
         try:
@@ -172,7 +172,7 @@ def render_cmp_virtual_metrology_page(current_dir: Path, sidebar: Any) -> None:
     local_sample = _find_local_sample(paths.cmp_data)
     if sample_col.button(
         "Run bundled local sample",
-        use_container_width=True,
+        width="stretch",
         disabled=local_sample is None,
         help=(
             "Uses CMP-training-000.csv from the ignored local PHM16 data folder."

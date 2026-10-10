@@ -80,7 +80,7 @@ def _render_actions(
     run_clicked = st.button(
         btn_label,
         type="primary",
-        use_container_width=True,
+        width="stretch",
         help="Executes Agent 1 (EquipmentData validation & temporal features) followed by Agent 2 (GroupKFold model training & evidence generation)."
     )
     log_placeholder = st.empty()
@@ -222,7 +222,7 @@ def _render_feature_preview(dataset: Any) -> None:
         "range, first-to-last delta, slope, early/middle/late process means, and missingness."
     )
     preview = pd.concat([dataset.identity, dataset.features.iloc[:, :18]], axis=1)
-    st.dataframe(preview.head(25), use_container_width=True, hide_index=True)
+    st.dataframe(preview.head(25), width="stretch", hide_index=True)
 
 
 def _render_validation_metrics(result: Any) -> None:
@@ -279,7 +279,7 @@ def _render_validation_metrics(result: Any) -> None:
             y1=maximum,
             line=dict(color="#666", dash="dash"),
         )
-        st.plotly_chart(figure, use_container_width=True)
+        st.plotly_chart(figure, width="stretch")
     with plot_right:
         confusion = pd.DataFrame(
             [
@@ -295,8 +295,8 @@ def _render_validation_metrics(result: Any) -> None:
             color_continuous_scale="Blues",
             title="Out-of-Fold Quality-Gate Confusion Matrix",
         )
-        st.plotly_chart(figure, use_container_width=True)
-    st.dataframe(result.fold_metrics, use_container_width=True, hide_index=True)
+        st.plotly_chart(figure, width="stretch")
+    st.dataframe(result.fold_metrics, width="stretch", hide_index=True)
 
 
 def _render_nine_algorithm_benchmark(output_dir: Path) -> None:
@@ -314,7 +314,7 @@ def _render_nine_algorithm_benchmark(output_dir: Path) -> None:
     )
     st.dataframe(
         view.style.format({"R²": "{:.4f}", "RMSE": "{:.4f}", "MAE": "{:.4f}"}),
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
     )
     st.download_button(
@@ -345,7 +345,7 @@ def _render_explanations(result: Any) -> None:
         orientation="h",
         title=f"Top {task.title()} Drivers",
     )
-    st.plotly_chart(figure, use_container_width=True)
+    st.plotly_chart(figure, width="stretch")
     methods = sorted(importance.get("importance_method", pd.Series(dtype=str)).dropna().unique())
     if methods == ["quality_class_filter_score"]:
         st.caption(
@@ -369,7 +369,7 @@ def _render_explanations(result: Any) -> None:
                 st.image(
                     svg_content,
                     caption="SHAP Summary (Beeswarm) Plot: Distribution and direction of feature impact on predictions (red = high feature value, blue = low)",
-                    use_container_width=True,
+                    width="stretch",
                 )
                 rendered = True
             except Exception:
@@ -378,13 +378,13 @@ def _render_explanations(result: Any) -> None:
             st.image(
                 str(shap_png),
                 caption="SHAP Summary (Beeswarm) Plot: Distribution and direction of feature impact on predictions (red = high feature value, blue = low)",
-                use_container_width=True,
+                width="stretch",
             )
 
 
 def _render_evidence(result: Any) -> None:
     st.subheader("4) Prediction Ledger and Evidence Files")
-    st.dataframe(result.predictions, use_container_width=True, hide_index=True, height=360)
+    st.dataframe(result.predictions, width="stretch", hide_index=True, height=360)
     st.download_button(
         "Download out-of-fold prediction ledger",
         data=result.predictions.to_csv(index=False).encode("utf-8"),

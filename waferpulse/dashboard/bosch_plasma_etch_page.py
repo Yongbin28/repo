@@ -106,12 +106,12 @@ def _render_wafer_average(
         labels={"r2": "R²", "model": "Model"},
     )
     figure.add_vline(x=0.0, line_dash="dash", line_color="#616161")
-    st.plotly_chart(figure, use_container_width=True)
+    st.plotly_chart(figure, width="stretch")
     st.dataframe(
         wafer[["model", "rows", "groups", "r2", "rmse", "mae"]].style.format(
             {"r2": "{:.4f}", "rmse": "{:.4f}", "mae": "{:.4f}"}
         ),
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
     )
     if predictions is None:
@@ -147,11 +147,11 @@ def _render_wafer_average(
         y1=maximum,
         line=dict(color="#616161", dash="dash"),
     )
-    st.plotly_chart(figure, use_container_width=True)
+    st.plotly_chart(figure, width="stretch")
     with st.expander("Wafer-average prediction ledger", expanded=False):
         st.dataframe(
             ledger[["experiment_key", "lot_number", "actual", "predicted"]],
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
 
@@ -191,7 +191,7 @@ def _render_spatial_metrology(metrics: pd.DataFrame) -> None:
         comparison[["feature_set", "model", "rows", "groups", "r2", "rmse", "mae"]].style.format(
             {"r2": "{:.4f}", "rmse": "{:.4f}", "mae": "{:.4f}"}
         ),
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
     )
 
@@ -240,7 +240,7 @@ def _render_research_classification(
             )
             figure.add_hline(y=stored_threshold, line_dash="dash", line_color="#c62828")
             figure.add_vline(x=stored_threshold, line_dash="dash", line_color="#c62828")
-            st.plotly_chart(figure, use_container_width=True)
+            st.plotly_chart(figure, width="stretch")
 
 
 def _render_explainability(output_dir: Path) -> None:
@@ -255,7 +255,7 @@ def _render_explainability(output_dir: Path) -> None:
                 st.image(
                     svg_content,
                     caption="SHAP Summary (Beeswarm) Plot: Distribution and direction of process feature impact on Silicon Etch Rate (red = high feature value, blue = low)",
-                    use_container_width=True,
+                    width="stretch",
                 )
                 rendered = True
             except Exception:
@@ -264,7 +264,7 @@ def _render_explainability(output_dir: Path) -> None:
             st.image(
                 str(shap_png),
                 caption="SHAP Summary (Beeswarm) Plot: Distribution and direction of process feature impact on Silicon Etch Rate (red = high feature value, blue = low)",
-                use_container_width=True,
+                width="stretch",
             )
 
 
@@ -351,7 +351,7 @@ def render_bosch_plasma_etch_page(
     if st.button(
         "⚡ Re-Run Complete Bosch Benchmark Suite (Regression & Screening)",
         type="primary",
-        use_container_width=True,
+        width="stretch",
     ):
         _run_full_benchmark(
             paths,

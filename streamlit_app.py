@@ -2368,9 +2368,9 @@ if app_mode == "Model Preparation Pipeline":
 
     col_btn1, col_btn2 = sidebar.columns(2)
     with col_btn1:
-        run_btn = st.button("Run Pipeline", disabled=st.session_state.processing, on_click=handle_run, use_container_width=True)
+        run_btn = st.button("Run Pipeline", disabled=st.session_state.processing, on_click=handle_run, width="stretch")
     with col_btn2:
-        reset_btn = st.button("Stop & Reset", on_click=handle_reset, use_container_width=True, help="Stop currently running pipeline and clear all logs/cache.", type="secondary")
+        reset_btn = st.button("Stop & Reset", on_click=handle_reset, width="stretch", help="Stop currently running pipeline and clear all logs/cache.", type="secondary")
 
     # Tabs
     tab1, tab2, tab3 = st.tabs(["Result Preview", "Logs", "Help"])
@@ -2396,7 +2396,7 @@ if app_mode == "Model Preparation Pipeline":
         if is_finished and st.session_state.get("generic_results"):
             summary_data = [{"Generic": g, "Status": s} for g, s in st.session_state.generic_results.items()]
             # Table height now scales based on content rather than being fixed.
-            st.dataframe(summary_data, use_container_width=True, hide_index=True)
+            st.dataframe(summary_data, width="stretch", hide_index=True)
 
             # --- Section 2: Model Validation Analytics ---
             st.markdown("---")
@@ -2456,7 +2456,7 @@ if app_mode == "Model Preparation Pipeline":
                                 with col_b:
                                     st.write(f"**Validation Samples:** `{len(df_val)}` lots/wafers")
                                 
-                                st.dataframe(df_val, use_container_width=True, hide_index=True)
+                                st.dataframe(df_val, width="stretch", hide_index=True)
                                 
                                 # 2. Scatter Plot (Actual vs Predicted)
                                 import plotly.graph_objects as go
@@ -2501,7 +2501,7 @@ if app_mode == "Model Preparation Pipeline":
                                         height=600,
                                         hovermode="closest"
                                     )
-                                    st.plotly_chart(fig, use_container_width=True)
+                                    st.plotly_chart(fig, width="stretch")
                         else:
                             st.info("The selected generic has no comparison sheets available. This may be an older model.")
                     except Exception as e:
@@ -3025,7 +3025,7 @@ elif app_mode == "Wafer Analytics & Prediction":
                                   st.write("---")
                                   st.subheader("📊 Raw Test Parameter Shift Summary")
                                   summary_df = build_real_test_summary(curr_df, hist_df, limits_df, shift_flags)
-                                  st.dataframe(style_shift_rows(summary_df), height=400, use_container_width=True)
+                                  st.dataframe(style_shift_rows(summary_df), height=400, width="stretch")
                               
                               # Render detailed analysis in first tab (tab_detail)
                               with tab_detail:
@@ -3068,7 +3068,7 @@ elif app_mode == "Wafer Analytics & Prediction":
                                                st.markdown(f"### 📊 Detail Analysis: {fmt_test(sel_test)}")
                                            with col_rc:
                                                try:
-                                                   with st.popover("💡 Root Cause Actions", use_container_width=True):
+                                                   with st.popover("💡 Root Cause Actions", width="stretch"):
                                                        st.markdown(get_root_cause_html(), unsafe_allow_html=True)
                                                except Exception:
                                                    if st.button("💡 Root Cause Actions", key=f"rc_btn_{sel_test}"):
@@ -3113,7 +3113,7 @@ elif app_mode == "Wafer Analytics & Prediction":
                                            fig_spc.update_layout(title=f"SPC Run Chart: {sel_test}", xaxis_title="Die Index (Sequence)", yaxis_title="Measured Value", template="plotly_white", height=400, margin=dict(l=20, r=20, t=50, b=50))
                                            return fig_spc
                           
-                                       st.plotly_chart(build_spc_fig(sel_test, sf), use_container_width=True)
+                                       st.plotly_chart(build_spc_fig(sel_test, sf), width="stretch")
                                        all_vals = []
                                        if not hist_df.empty and sel_test in hist_df.columns: all_vals.append(hist_df[sel_test].dropna())
                                        if not curr_df.empty and sel_test in curr_df.columns: all_vals.append(curr_df[sel_test].dropna())
@@ -3145,8 +3145,8 @@ elif app_mode == "Wafer Analytics & Prediction":
                                                   if pd.notna(l_row.iloc[0]["USL"]): fig_dist.add_vline(x=float(l_row.iloc[0]["USL"]), line_dash="dash", line_color="red", annotation_text="USL")
                                           fig_dist.update_layout(title=f"Distribution: {sel_test} (Full Range & Limits)" if not filtered else f"Distribution: {sel_test} (99% Data subset, No Limits)", xaxis_title="Measured Value", yaxis_title="Probability Density", template="plotly_white", height=500, barmode='overlay', margin=dict(l=20, r=20, t=50, b=120), legend=dict(orientation="h", yanchor="top", y=-0.25, xanchor="center", x=0.5))
                                           return fig_dist
-                                       st.plotly_chart(build_dist_fig(filtered=True), use_container_width=True)
-                                       if show_full_range: st.plotly_chart(build_dist_fig(filtered=False), use_container_width=True)
+                                       st.plotly_chart(build_dist_fig(filtered=True), width="stretch")
+                                       if show_full_range: st.plotly_chart(build_dist_fig(filtered=False), width="stretch")
                                        st.divider()
                               
                               with tab_radar:
@@ -3168,7 +3168,7 @@ elif app_mode == "Wafer Analytics & Prediction":
                                               fig_radar.add_trace(go.Scatterpolar(r=[0.0] * len(radar_params), theta=radar_params, fill='toself', name='Golden Baseline', line=dict(color='#28a745', width=2), opacity=0.5))
                                               fig_radar.add_trace(go.Scatterpolar(r=current_vals, theta=radar_params, fill='toself', name='Current Wafer', line=dict(color='#dc3545', width=2), opacity=0.5))
                                               fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[-5, 5])), title="Probe Parameter Deviation (Zσ units)", height=500, showlegend=True)
-                                              st.plotly_chart(fig_radar, use_container_width=True)
+                                              st.plotly_chart(fig_radar, width="stretch")
                                   else:
                                       st.info("Golden baseline or current parameter stats not available.")
 
@@ -3229,7 +3229,7 @@ elif app_mode == "Wafer Analytics & Prediction":
                         if "🔴" in str(row.get("Status", "")): return ["background-color: #ffe0e0"] * len(row)
                         elif "⚠️" in str(row.get("Status", "")): return ["background-color: #fff3cd"] * len(row)
                         return ["background-color: #d4edda"] * len(row)
-                    st.dataframe(probe_comparison_df.style.apply(style_golden_rows, axis=1), use_container_width=True, height=400)
+                    st.dataframe(probe_comparison_df.style.apply(style_golden_rows, axis=1), width="stretch", height=400)
                     n_pass = len(probe_comparison_df[probe_comparison_df["Status"].str.contains("✅")])
                     n_warn = len(probe_comparison_df[probe_comparison_df["Status"].str.contains("⚠️")])
                     n_fail = len(probe_comparison_df[probe_comparison_df["Status"].str.contains("🔴")])
@@ -3283,7 +3283,7 @@ elif app_mode == "Wafer Analytics & Prediction":
                         if "🔴" in str(row.get("Status", "")): return ["background-color: #ffe0e0"] * len(row)
                         elif "⚠️" in str(row.get("Status", "")): return ["background-color: #fff3cd"] * len(row)
                         return ["background-color: #d4edda"] * len(row)
-                    st.dataframe(ft_comparison_df.style.apply(style_ft_rows, axis=1), use_container_width=True, height=400)
+                    st.dataframe(ft_comparison_df.style.apply(style_ft_rows, axis=1), width="stretch", height=400)
                     n_ft_pass = len(ft_comparison_df[ft_comparison_df["Status"].str.contains("✅")])
                     n_ft_warn = len(ft_comparison_df[ft_comparison_df["Status"].str.contains("⚠️")])
                     n_ft_fail = len(ft_comparison_df[ft_comparison_df["Status"].str.contains("🔴")])
@@ -3528,7 +3528,7 @@ elif app_mode == "Wafer Analytics & Prediction":
                             return fig_dist
                             
                         # Show 99% filtered distribution chart
-                        st.plotly_chart(build_ft_dist_fig(filtered=True), use_container_width=True)
+                        st.plotly_chart(build_ft_dist_fig(filtered=True), width="stretch")
             else:
                 st.info("No historical final test data available.")
                 if st.button("🔄 Force Refresh Baseline Cache", key="btn_force_refresh_ft"):
@@ -3596,7 +3596,7 @@ elif app_mode == "Wafer Analytics & Prediction":
                         orientation="h"
                     )
                     with st.container(border=True):
-                        st.plotly_chart(fig_heat, use_container_width=True)
+                        st.plotly_chart(fig_heat, width="stretch")
                     
                     st.caption("🔴 Red = pushes FT yield prediction lower · 🟢 Green = pushes FT yield prediction higher")
                 except Exception as e:
@@ -3673,7 +3673,7 @@ elif app_mode == "Wafer Analytics & Prediction":
                                     orientation="h"
                                 )
                                 fig_heat.update_layout(height=500)
-                                st.plotly_chart(fig_heat, use_container_width=True)
+                                st.plotly_chart(fig_heat, width="stretch")
                                 st.caption("Higher importance = shuffling this probe parameter causes larger drop in FT prediction accuracy.")
                             else:
                                 st.warning("No target columns found for importance analysis.")
@@ -3771,7 +3771,7 @@ elif app_mode == "Wafer Analytics & Prediction":
                             ft_rows.append({"FT Parameter": k, "Predicted Value": f"{v:.4g}" if isinstance(v, (int, float)) else str(v)})
                     
                     if ft_rows:
-                        st.dataframe(pd.DataFrame(ft_rows), use_container_width=True, hide_index=True)
+                        st.dataframe(pd.DataFrame(ft_rows), width="stretch", hide_index=True)
                     
             
         with tab_map:
@@ -3900,7 +3900,7 @@ elif app_mode == "Wafer Analytics & Prediction":
                                 borderwidth=1
                             )
                         )
-                        st.plotly_chart(fig_map, use_container_width=True)
+                        st.plotly_chart(fig_map, width="stretch")
                     else:
                         st.warning("Wafer Map coordinates (X, Y) are missing from the parsed payload.")
                 except Exception as e:
@@ -4351,7 +4351,7 @@ elif app_mode == "Wafer Analytics & Prediction":
                 file_name=f"Wafer_Reliability_Certificate_{p_lot_id}.html",
                 mime="text/html",
                 type="primary",
-                use_container_width=True
+                width="stretch"
             )
         with col_c2:
             show_preview = st.toggle("📄 Show Certificate Preview", value=False)

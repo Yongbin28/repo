@@ -93,7 +93,7 @@ def render_auth_gate() -> bool:
             unsafe_allow_html=True,
         )
 
-        if st.sidebar.button("🚪 Sign Out", use_container_width=True, type="secondary"):
+        if st.sidebar.button("🚪 Sign Out", width="stretch", type="secondary"):
             st.session_state["authenticated"] = False
             st.session_state["auth_username"] = ""
             st.session_state["auth_user_name"] = ""
@@ -126,7 +126,7 @@ def render_auth_gate() -> bool:
             st.markdown("##### Please Sign In to Access Platform")
             username_input = st.text_input("Username", placeholder="e.g. engineer, admin", key="input_user")
             password_input = st.text_input("Password", type="password", placeholder="Enter your password", key="input_pwd")
-            submit_login = st.form_submit_button("Sign In to WaferPulse", use_container_width=True, type="primary")
+            submit_login = st.form_submit_button("Sign In to WaferPulse", width="stretch", type="primary")
 
             if submit_login:
                 if not username_input or not password_input:
