@@ -355,6 +355,7 @@ class YieldPredictor:
             # 4. Inference
             preds, valid = {}, []
             shap_data_dict = {}
+            shap_errors = {}
             for m_path in self.models:
                 try:
                     pipe = joblib.load(m_path)
@@ -402,53 +403,23 @@ class YieldPredictor:
                             "predicted_yield_pct": pred_yield_pct,
                         }
                     
-                    # Explainability (SHAP)
+                    # Build linear SHAP from the current model, not a stale pickle.
+                    from waferpulse.core.explainability import explain_prediction
                     explainer_path = m_path.parent / m_path.name.replace("model_", "explainer_")
-                    if explainer_path.exists():
-                        try:
-                            import shap
-                            explainer = joblib.load(explainer_path)
-                            X_transformed = pipe[:-1].transform(X_aligned)
-                            
-                            shap_explanations = explainer(X_transformed)
-                            
-                            # Handle different formats of multi-output SHAP values
-                            if isinstance(shap_explanations.values, list):
-                                # List of arrays (one per output)
-                                val_arr = shap_explanations.values[0][0] if len(shap_explanations.values) > 0 else np.zeros(X_aligned.shape[1])
-                                b_val = shap_explanations.base_values[0][0] if isinstance(shap_explanations.base_values, list) else (shap_explanations.base_values[0] if hasattr(shap_explanations.base_values, "__len__") else shap_explanations.base_values)
-                                d_arr = shap_explanations.data[0] if hasattr(shap_explanations.data, "__len__") and len(shap_explanations.data.shape) > 1 else shap_explanations.data
-                            elif len(shap_explanations.values.shape) == 3:
-                                # 3D array: (n_samples, n_features, n_outputs)
-                                s_val = shap_explanations.values
-                                if s_val.shape[2] == len(targets_schema) or s_val.shape[2] > s_val.shape[0]:
-                                    val_arr = s_val[0, :, 0]
-                                else:
-                                    val_arr = s_val[0, 0, :]
-                                b_val = shap_explanations.base_values[0, 0] if len(shap_explanations.base_values.shape) > 1 else shap_explanations.base_values[0]
-                                d_arr = shap_explanations.data[0]
-                            else:
-                                val_arr = shap_explanations.values[0] if len(shap_explanations.values.shape) > 1 else shap_explanations.values
-                                b_val = shap_explanations.base_values[0] if hasattr(shap_explanations.base_values, "__len__") else shap_explanations.base_values
-                                d_arr = shap_explanations.data[0] if hasattr(shap_explanations.data, "__len__") and len(shap_explanations.data.shape) > 1 else shap_explanations.data
+                    try:
+                        background = None
+                        if ref_path and ref_path.exists():
+                            background = df_ref[exp_cols].apply(pd.to_numeric, errors="coerce").copy()
+                            background.columns = ml_train_model.sanitize_feature_names(list(background.columns))
+                            background = background.reindex(columns=X_aligned.columns)
+                        target_index = targets_schema.index("FT_y") if "FT_y" in targets_schema else (targets_schema.index("y") if "y" in targets_schema else 0)
+                        shap_data_dict[m_name] = explain_prediction(
+                            pipe, X_aligned, background, explainer_path, target_index
+                        )
+                    except Exception as e:
+                        shap_errors[m_name] = f"{type(e).__name__}: {e}"
+                        self.log_func(f"[WARN] SHAP unavailable for {m_name}: {e}")
 
-                            if hasattr(val_arr, "tolist"): val_arr = val_arr.tolist()
-                            if hasattr(b_val, "tolist"): b_val = b_val.tolist()
-                            if isinstance(b_val, (list, np.ndarray)):
-                                b_val = float(b_val[0]) if len(b_val) > 0 else 0.0
-                            else:
-                                b_val = float(b_val)
-                            if hasattr(d_arr, "tolist"): d_arr = d_arr.tolist()
-                            
-                            shap_data_dict[m_name] = {
-                                "values": val_arr,
-                                "base_values": b_val,
-                                "data": d_arr,
-                                "feature_names": list(X_aligned.columns)
-                            }
-                        except Exception as e:
-                            logger.debug("SHAP explanation not available for %s: %s", m_name, e)
-                            
                 except Exception as e:
                     self.log_func(f"[WARN] Inference {m_path.name} failed: {e}")
 
@@ -458,6 +429,7 @@ class YieldPredictor:
                 "status": "success",
                 "predictions": preds,
                 "shap_data": shap_data_dict,
+                "shap_errors": shap_errors,
                 "average_prediction": float(np.mean(valid)),
                 "curr_df": num_df,
                 "full_df": full_df,

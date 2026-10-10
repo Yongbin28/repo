@@ -2735,6 +2735,7 @@ elif app_mode == "Wafer Analytics & Prediction":
                             "Predicted_Yield": float(np.clip(avg_val, 0, 1)),
                             "details": result.get("predictions", {}),
                             "shap_data": result.get("shap_data", {}),
+                            "shap_errors": result.get("shap_errors", {}),
                             "curr_df": result.get("curr_df", None),
                             "full_df": result.get("full_df", None),
                             "limit_map": result.get("limit_map", {}),
@@ -3601,6 +3602,10 @@ elif app_mode == "Wafer Analytics & Prediction":
                 except Exception as e:
                     st.error(f"Could not render Feature Heatmap: {e}")
             else:
+                if res.get("shap_errors"):
+                    with st.expander("Why SHAP is unavailable"):
+                        for name, error in res["shap_errors"].items():
+                            st.write(f"{name}: {error}")
                 # Permutation Importance Fallback for Feature Heatmap
                 st.info("SHAP explainer not available. Using **Permutation Importance** to show probe parameter impact on FT predictions.")
                 try:
