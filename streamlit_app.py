@@ -2605,11 +2605,15 @@ elif app_mode == "Wafer Analytics & Prediction":
                 seen_opt.add(f["label"])
                 lot_files.append(f)
         file_options = [f["label"] for f in lot_files] + ["📂 Upload Custom DLog File..."]
+        default_file_index = next(
+            (i for i, f in enumerate(lot_files) if "SYN_0044" in f["label"]),
+            0,
+        )
         
         sel_file_choice = st.sidebar.selectbox(
             "Select Lot / Wafer File",
             options=file_options,
-            index=0,
+            index=default_file_index,
             help="Select an existing lot file from the dataset or upload a new one."
         )
 
