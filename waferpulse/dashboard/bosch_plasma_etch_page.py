@@ -176,11 +176,6 @@ def _render_spatial_metrology(metrics: pd.DataFrame) -> None:
     if not process_only.empty:
         c3.metric("Process-only point R²", f"{process_only.iloc[0]['r2']:.4f}")
 
-    st.warning(
-        "The high spatial-map score uses the known X/Y measurement location. Because "
-        "the coordinate-only baseline is already strong, this result is spatial virtual "
-        "metrology—not pure equipment-sensor prediction."
-    )
     comparison = (
         spatial.sort_values("r2", ascending=False)
         .groupby("feature_set", as_index=False)
