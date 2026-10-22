@@ -400,6 +400,8 @@ class YieldPredictor:
                         shap_data_dict[m_name] = explain_prediction(
                             pipe, X_aligned, background, explainer_path, target_index
                         )
+                        shap_data_dict[m_name]["target_name"] = targets_schema[target_index]
+                        shap_data_dict[m_name]["contribution_units"] = "model output units"
                     except Exception as e:
                         shap_errors[m_name] = f"{type(e).__name__}: {e}"
                         self.log_func(f"[WARN] SHAP unavailable for {m_name}: {e}")

@@ -1066,8 +1066,8 @@ def get_readable_feature_name(fname: str) -> str:
     
     # Handle stat suffixes
     stat_map = {
-        "__mean": " (Mean)",
-        "__std": " (Std)",
+        "__mean": " mean",
+        "__std": " standard deviation",
         "__median": " (Median)",
         "__iqr": " (IQR)",
         "__outlier_rate": " (Outlier%)",
@@ -3602,7 +3602,11 @@ elif app_mode == "Wafer Analytics & Prediction":
                     with st.container(border=True):
                         st.plotly_chart(fig_heat, width="stretch")
                     
-                    st.caption("🔴 Red = pushes FT yield prediction lower · 🟢 Green = pushes FT yield prediction higher")
+                    explained_target = s_dict.get("target_name", "selected model output")
+                    st.caption(
+                        f"Contributions to {explained_target}, in model output units, relative to the training-reference prediction. "
+                        "Red indicates a lower prediction; green indicates a higher prediction."
+                    )
                 except Exception as e:
                     st.error(f"Could not render Feature Heatmap: {e}")
             else:
@@ -3716,8 +3720,13 @@ elif app_mode == "Wafer Analytics & Prediction":
                             fname = get_readable_feature_name(row['Feature'])
                             
                             direction = "🔻" if row['Value'] < 0 else "🔺"
-                            val_str = f"decreased yield by {abs(row['Value'])*100:.2f}%" if row['Value'] < 0 else f"increased yield by {row['Value']*100:.2f}%"
+                            val_str = f"contribution: {row['Value']:+.4g} model output units"
                             st.markdown(f"- {direction} **{fname}** {val_str}")
+                        explained_target = s_dict.get("target_name", "selected model output")
+                        st.caption(
+                            f"Explained target: {explained_target}. Contributions are relative to the training-reference prediction, "
+                            "not percentage changes in wafer yield."
+                        )
                     else:
                         st.caption("SHAP factor details were unavailable for this wafer.")
                 except Exception as shap_err:

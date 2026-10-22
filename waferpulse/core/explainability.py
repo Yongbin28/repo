@@ -4,6 +4,51 @@ import joblib
 import numpy as np
 from sklearn.linear_model import ElasticNet, Lasso, Ridge
 from sklearn.multioutput import MultiOutputRegressor
+from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
+
+
+def _steps(transformer):
+    if isinstance(transformer, Pipeline):
+        for _, step in transformer.steps:
+            yield from _steps(step)
+    elif transformer is not None and transformer != "passthrough":
+        yield transformer
+
+
+def _original_linear_inputs(pipe, row, background, coefficients):
+    """Fold affine preprocessing into coefficients, keeping imputed probe inputs."""
+    steps = list(_steps(pipe[:-1]))
+    weights = np.asarray(coefficients, dtype=float).copy()
+    for step in reversed(steps):
+        if isinstance(step, PCA):
+            if step.whiten:
+                weights = weights / np.sqrt(step.explained_variance_)
+            weights = weights @ step.components_
+        elif isinstance(step, StandardScaler):
+            if step.with_std:
+                weights = weights / step.scale_
+        elif isinstance(step, SimpleImputer):
+            break
+        else:
+            raise ValueError("Original-feature explanations require supported affine preprocessing")
+
+    data, reference = row, background
+    names = list(row.columns)
+    for step in steps:
+        if isinstance(step, SimpleImputer):
+            names = list(step.get_feature_names_out(names))
+            data, reference = step.transform(data), step.transform(reference)
+        else:
+            # Scaling and PCA have already been folded into the coefficients.
+            break
+    data = np.asarray(data, dtype=float)[0]
+    reference = np.asarray(reference, dtype=float)
+    if len(names) != len(weights):
+        raise ValueError("Original feature names do not match effective linear coefficients")
+    return names, data, reference.mean(axis=0), weights
 
 
 def explain_prediction(pipe, row, background, explainer_path, target_index=0):
@@ -16,19 +61,18 @@ def explain_prediction(pipe, row, background, explainer_path, target_index=0):
     if isinstance(estimator, (Lasso, Ridge, ElasticNet)):
         if background is None or background.empty:
             raise ValueError("Training reference data is required for linear SHAP explanations")
-        reference = pipe[:-1].transform(background)
-        mean = np.asarray(reference.mean(axis=0)).ravel()
         coefficients = np.asarray(estimator.coef_)
-        intercept = np.asarray(estimator.intercept_)
         if coefficients.ndim > 1:
             coefficients = coefficients[target_index]
-            intercept = intercept[target_index]
         # Exact interventional SHAP for a linear model: beta * (x - E[X]).
         # Compute directly from the fitted model, avoiding SHAP/Numba imports
         # and serialized explainer compatibility across deployment versions.
-        data = np.asarray(transformed).reshape(len(row), -1)[0]
+        names, data, mean, coefficients = _original_linear_inputs(
+            pipe, row, background, coefficients
+        )
         values = coefficients * (data - mean)
-        base = float(intercept + coefficients @ mean)
+        predictions = np.asarray(pipe.predict(background))
+        base = float(predictions[:, target_index].mean() if predictions.ndim > 1 else predictions.mean())
     else:
         import shap
 
