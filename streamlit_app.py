@@ -3177,7 +3177,7 @@ elif app_mode == "Wafer Analytics & Prediction":
                                       st.info("Golden baseline or current parameter stats not available.")
 
         st.markdown("---")
-        st.subheader("2) Local Demonstration Estimate & Virtual Golden Wafer")
+        st.subheader("2) Final Test Prediction vs. Golden Wafer Reference")
         p_year = st.session_state.get("p_year", "Unknown")
         st.markdown(f"**Lot ID:** `{p_lot_id}` | **Fiscal Year:** `{p_year}`")
         
