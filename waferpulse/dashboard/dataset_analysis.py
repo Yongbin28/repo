@@ -590,6 +590,13 @@ def render_uploaded_dataset_analysis(sidebar: Any | None = None) -> None:
             f"agent status {decision['status']}. The uploaded file remains in memory only."
         )
         st.dataframe(metrics, width="stretch", hide_index=True)
+        if metadata.get("shap_svg"):
+            st.markdown("#### SHAP Beeswarm for the validation champion")
+            st.caption(
+                f"Explains the {metadata['champion']} model refitted on the uploaded table; "
+                "the upload and plot remain in the current session."
+            )
+            st.image(metadata["shap_svg"], width="stretch")
         champion_predictions = predictions.loc[
             predictions["model"].eq(champion["model"])
         ]

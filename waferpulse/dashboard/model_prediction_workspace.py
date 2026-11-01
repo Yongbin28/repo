@@ -28,7 +28,7 @@ def render_model_prediction_workspace(current_dir: Path, sidebar: Any) -> None:
 
     st.header("Model Prediction & Validation")
     st.caption(
-        "Choose the data source first, then run the matching prediction workflow or inspect "
+        "Choose the data source first, then run the prediction workflow or inspect "
         "the locally available source data."
     )
     sidebar.markdown("---")
@@ -37,7 +37,7 @@ def render_model_prediction_workspace(current_dir: Path, sidebar: Any) -> None:
         "Select data source",
         options=[BOSCH_SOURCE, EQUIPMENT_SOURCE, LOCAL_SOURCE],
         key="prediction_dataset_source",
-        help="Each public source uses its own schema-aware feature and model pipeline.",
+        help="Both public datasets follow the same workflow, with preparation and models suited to each source.",
     )
 
     if source == BOSCH_SOURCE:

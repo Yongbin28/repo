@@ -21,7 +21,6 @@ from __future__ import annotations
 import argparse
 import json
 import re
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping
 
@@ -45,6 +44,8 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from xgboost import XGBRegressor
 
+from waferpulse.core.bosch_contracts import BoschDataset
+
 
 SEED = 42
 TARGETS = ("si_etch", "oxide_etch")
@@ -61,13 +62,6 @@ MODEL_CATEGORY_MAP: Mapping[str, str] = {
     "xgboost": "Boosting Ensemble",
     "lightgbm": "Boosting Ensemble",
 }
-
-
-@dataclass(frozen=True)
-class BoschDataset:
-    process: pd.DataFrame
-    measurements: pd.DataFrame
-    metadata: Mapping[str, Any]
 
 
 def group_to_experiment_key(name: str) -> str:
@@ -496,6 +490,17 @@ def run(
     agentic_decision: Mapping[str, Any] | None = None,
 ) -> pd.DataFrame:
     dataset = load_dataset(root, refresh_cache=refresh_cache)
+    return train_bosch_models(dataset, root, output, search_profile, agentic_decision)
+
+
+def train_bosch_models(
+    dataset: BoschDataset,
+    root: Path,
+    output: Path,
+    search_profile: str = "balanced",
+    agentic_decision: Mapping[str, Any] | None = None,
+) -> pd.DataFrame:
+    """Evaluate and export using the dataset prepared by the data agent."""
     results, predictions = benchmark(dataset, search_profile)
     output.mkdir(parents=True, exist_ok=True)
 
@@ -634,62 +639,130 @@ def run(
     (output / "summary.json").write_text(
         json.dumps(summary, indent=2), encoding="utf-8"
     )
-    _generate_bosch_shap(dataset, output)
+    _generate_bosch_shap(dataset, results, output, search_profile)
     return results
 
 
-def _generate_bosch_shap(dataset: Dataset, output: Path) -> None:
+def _generate_bosch_shap(
+    dataset: BoschDataset,
+    results: pd.DataFrame,
+    output: Path,
+    search_profile: str = "balanced",
+) -> None:
+    """Explain each silicon-etch task's lot-held-out champion after refitting it."""
     try:
         import shap
         import matplotlib.pyplot as plt
 
-        wafer_targets = (
-            dataset.measurements.groupby(["experiment_key", "lot_number"], as_index=False)["si_etch"]
-            .mean()
-            .merge(dataset.process, on="experiment_key")
-        )
         process_cols = [c for c in dataset.process.columns if c != "experiment_key"]
-        X = wafer_targets[process_cols]
-        y = wafer_targets["si_etch"].values
-
-        pipe = model_candidates(X.shape[1])["lightgbm"]
-        pipe.fit(X, y)
-
-        X_trans = pipe[:-1].transform(X)
-        selector = pipe.named_steps["selector"]
-        raw_cols = np.array(process_cols)[selector.get_support()]
-
-        def clean_bosch_name(name: str) -> str:
-            return name.replace("signal__", "").replace("__", " · ")
-
-        cleaned_cols = [clean_bosch_name(c) for c in raw_cols]
-        lgbm_model = pipe.named_steps["model"]
-        explainer = shap.TreeExplainer(lgbm_model)
-        shap_values = explainer.shap_values(X_trans)
+        points = dataset.measurements.merge(
+            dataset.process, on="experiment_key", how="inner", validate="many_to_one"
+        ).reset_index(drop=True)
+        coordinates = coordinate_features(points).reset_index(drop=True)
+        process_at_points = points[process_cols].reset_index(drop=True)
+        spatial_features = {
+            "coordinate_only": coordinates,
+            "process_only": process_at_points,
+            "process_plus_coordinate": pd.concat(
+                [process_at_points, coordinates], axis=1
+            ),
+        }
+        wafer_targets = (
+            points.groupby(["experiment_key", "lot_number"], as_index=False)["si_etch"]
+            .mean()
+            .merge(dataset.process, on="experiment_key", validate="one_to_one")
+        )
+        tasks = [
+            (
+                "wafer_mean",
+                "process_only",
+                "Wafer-average silicon etch",
+                wafer_targets[process_cols],
+                wafer_targets["si_etch"].to_numpy(dtype=float),
+                process_cols,
+            ),
+            *[
+                (
+                    "map_point",
+                    feature_set,
+                    f"Spatial silicon etch ({feature_set.replace('_', ' ')})",
+                    features,
+                    points["si_etch"].to_numpy(dtype=float),
+                    list(features.columns),
+                )
+                for feature_set, features in spatial_features.items()
+            ],
+        ]
 
         plt.rcParams["font.sans-serif"] = "Segoe UI", "DejaVu Sans", "Arial"
         plt.rcParams["font.size"] = 10
+        for task_name, feature_set, title, X, y, feature_names in tasks:
+            champion_rows = results.loc[
+                results["task"].eq(task_name)
+                & results["target"].eq("si_etch")
+                & results["feature_set"].eq(feature_set)
+            ]
+            if champion_rows.empty:
+                continue
+            champion = champion_rows.sort_values("r2", ascending=False).iloc[0]
+            model_name = champion["model"]
+            if model_name not in model_candidates(X.shape[1], search_profile):
+                continue
+            pipe = clone(model_candidates(X.shape[1], search_profile)[model_name])
+            pipe.fit(X, y)
+            X_trans = pipe[:-1].transform(X)
+            selector = pipe.named_steps.get("selector")
+            selected_names = (
+                np.asarray(feature_names)[selector.get_support()]
+                if selector is not None
+                else np.asarray(feature_names)
+            )
+            cleaned_names = [
+                str(name).replace("signal__", "").replace("__", " · ")
+                for name in selected_names
+            ]
+            estimator = pipe.named_steps["model"]
+            try:
+                explainer = shap.TreeExplainer(estimator)
+                shap_values = explainer.shap_values(X_trans)
+            except Exception:
+                # Model-agnostic fallback for champions that are not supported by TreeExplainer.
+                sample_n = min(100, len(X_trans))
+                explainer = shap.Explainer(pipe.predict, X.iloc[: min(50, len(X))])
+                explanation = explainer(X.iloc[:sample_n])
+                shap_values = explanation.values
+                X_trans = X.iloc[:sample_n]
+                cleaned_names = [
+                    str(name).replace("signal__", "").replace("__", " · ")
+                    for name in feature_names
+                ]
 
-        fig = plt.figure(figsize=(14, 6), dpi=300)
-        shap.summary_plot(
-            shap_values,
-            X_trans,
-            feature_names=cleaned_cols,
-            max_display=10,
-            plot_size=None,
-            show=False,
-            color_bar=True,
-            alpha=0.85,
-        )
-        ax = plt.gca()
-        ax.tick_params(axis="y", labelsize=10, pad=8)
-        ax.tick_params(axis="x", labelsize=9.5)
-        ax.set_xlabel("SHAP value (impact on model output)", fontsize=10.5, labelpad=8)
-        plt.title("SHAP Beeswarm Summary Plot — Top 10 Feature Drivers (Bosch Etch)", fontsize=12, fontweight="bold", pad=15)
-        plt.subplots_adjust(left=0.25, right=0.92, top=0.92, bottom=0.12)
-        fig.savefig(output / "bosch_shap_beeswarm.png", dpi=300, bbox_inches="tight")
-        fig.savefig(output / "bosch_shap_beeswarm.svg", format="svg", bbox_inches="tight")
-        plt.close(fig)
+            fig = plt.figure(figsize=(14, 6), dpi=300)
+            shap.summary_plot(
+                shap_values,
+                X_trans,
+                feature_names=cleaned_names,
+                max_display=10,
+                plot_size=None,
+                show=False,
+                color_bar=True,
+                alpha=0.85,
+            )
+            ax = plt.gca()
+            ax.tick_params(axis="y", labelsize=10, pad=8)
+            ax.tick_params(axis="x", labelsize=9.5)
+            ax.set_xlabel("SHAP value (impact on model output)", fontsize=10.5, labelpad=8)
+            plt.title(
+                f"SHAP Beeswarm — {title}; champion: {model_name} (R²={champion['r2']:.3f})",
+                fontsize=12,
+                fontweight="bold",
+                pad=15,
+            )
+            plt.subplots_adjust(left=0.25, right=0.92, top=0.92, bottom=0.12)
+            stem = f"bosch_shap_{task_name}_{feature_set}"
+            fig.savefig(output / f"{stem}.png", dpi=300, bbox_inches="tight")
+            fig.savefig(output / f"{stem}.svg", format="svg", bbox_inches="tight")
+            plt.close(fig)
     except Exception:
         pass
 

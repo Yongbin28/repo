@@ -209,14 +209,14 @@ def compute_product_grade(
     """
     Standalone post-packaging product grade classification per Table 3-6 of Phase 1 Report:
     - Grade A (Automotive): Score >= 90
-    - Grade B (Industrial): Score >= 75
-    - Grade C (Consumer): Score >= 60
+    - Grade B (Industrial): 80 <= Score < 90
+    - Grade C (Consumer): 60 <= Score < 80
     - Grade D (Scrap/Reject): Score < 60
     """
     if risk_score >= 90:
         grade = "A"
         desc = "Automotive"
-    elif risk_score >= 75:
+    elif risk_score >= 80:
         grade = "B"
         desc = "Industrial"
     elif risk_score >= 60:

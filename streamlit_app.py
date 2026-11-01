@@ -3934,7 +3934,7 @@ elif app_mode == "Wafer Analytics & Prediction":
             help=(
                 "Grading Standards (Table 3-6):\n\n"
                 "Grade A (Automotive): Score >= 90\n\n"
-                "Grade B (Industrial): Score >= 75\n\n"
+                "Grade B (Industrial): Score >= 80\n\n"
                 "Grade C (Consumer): Score >= 60\n\n"
                 "Grade D (Scrap/Reject): Score < 60"
             )

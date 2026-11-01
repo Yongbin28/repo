@@ -92,9 +92,9 @@ http://<YOUR-EC2-PUBLIC-IP>:8501
 
 | Role | Username | Default Password | Permissions |
 |---|---|---|---|
-| **Quality Lead Administrator** | `admin` | `admin123` | Full access to pipeline runs, models, and analytics |
-| **Fab Process Engineer** | `engineer` | `engineer123` | Single-wafer and batch yield prediction & verification |
-| **Quality Auditor** | `auditor` | `auditor123` | Read-only inspection of reliability health certificates |
+| **Quality Lead Administrator** | `admin` | `admin321` *(or `role321`)* | Full access to pipeline runs, models, and analytics |
+| **Fab Process Engineer** | `engineer` | `engineer321` *(or `role321`)* | Single-wafer and batch yield prediction & verification |
+| **Quality Auditor** | `auditor` | `auditor321` *(or `role321`)* | Read-only inspection of reliability health certificates |
 
 *(To change passwords or add new team members, edit `config/users.json` on the server).*
 

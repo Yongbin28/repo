@@ -358,28 +358,24 @@ def _render_explanations(result: Any) -> None:
             "association measure and not a causal claim."
         )
 
-    shap_svg = Path("output/equipment_quality/shap_beeswarm_summary.svg")
-    shap_png = Path("output/equipment_quality/shap_beeswarm_summary.png")
-    if shap_svg.exists() or shap_png.exists():
-        st.markdown("#### SHAP Beeswarm Summary Plot")
-        rendered = False
-        if shap_svg.exists():
-            try:
-                svg_content = shap_svg.read_text(encoding="utf-8")
-                st.image(
-                    svg_content,
-                    caption="SHAP Summary (Beeswarm) Plot: Distribution and direction of feature impact on predictions (red = high feature value, blue = low)",
-                    width="stretch",
-                )
-                rendered = True
-            except Exception:
-                rendered = False
-        if not rendered and shap_png.exists():
-            st.image(
-                str(shap_png),
-                caption="SHAP Summary (Beeswarm) Plot: Distribution and direction of feature impact on predictions (red = high feature value, blue = low)",
-                width="stretch",
-            )
+    st.markdown("#### SHAP Beeswarm Explanations")
+    for task, label in (
+        ("regression", "Regression champion"),
+        ("classification", "Classification champion"),
+    ):
+        shap_svg = Path(f"output/equipment_quality/shap_beeswarm_{task}.svg")
+        shap_png = Path(f"output/equipment_quality/shap_beeswarm_{task}.png")
+        if shap_svg.exists() or shap_png.exists():
+            st.markdown(f"**{label}**")
+            rendered = False
+            if shap_svg.exists():
+                try:
+                    st.image(shap_svg.read_text(encoding="utf-8"), width="stretch")
+                    rendered = True
+                except Exception:
+                    rendered = False
+            if not rendered and shap_png.exists():
+                st.image(str(shap_png), width="stretch")
 
 
 def _render_evidence(result: Any) -> None:

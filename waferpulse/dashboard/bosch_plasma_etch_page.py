@@ -12,10 +12,10 @@ import streamlit as st
 
 from waferpulse.config import WaferPulsePaths
 from waferpulse.core.data_lanes import BOSCH_PLASMA_ETCH
+from waferpulse.crews import BoschPredictionCrew
 from waferpulse.dashboard.components import render_data_lane_notice
 from waferpulse.agents.groq_model_selection_agent import (
     DEFAULT_MAX_AGENT_ITERATIONS,
-    choose_search_profile_from_summary,
 )
 
 DEFAULT_RESEARCH_THRESHOLD = 44.0
@@ -240,27 +240,32 @@ def _render_research_classification(
 
 def _render_explainability(output_dir: Path) -> None:
     st.subheader("5) Explainable Process Drivers (SHAP Beeswarm Plot)")
-    shap_svg = output_dir / "bosch_shap_beeswarm.svg"
-    shap_png = output_dir / "bosch_shap_beeswarm.png"
-    if shap_svg.exists() or shap_png.exists():
-        rendered = False
-        if shap_svg.exists():
-            try:
-                svg_content = shap_svg.read_text(encoding="utf-8")
+    plot_files = sorted(output_dir.glob("bosch_shap_wafer_mean_*.svg"))
+    plot_files += sorted(output_dir.glob("bosch_shap_map_point_*.svg"))
+    if not plot_files:
+        plot_files = sorted(output_dir.glob("bosch_shap_wafer_mean_*.png"))
+        plot_files += sorted(output_dir.glob("bosch_shap_map_point_*.png"))
+    if plot_files:
+        for plot_file in plot_files:
+            rendered = False
+            if plot_file.suffix.lower() == ".svg":
+                try:
+                    svg_content = plot_file.read_text(encoding="utf-8")
+                    st.image(
+                        svg_content,
+                        caption=plot_file.stem.replace("bosch_shap_", "").replace("_", " ").title(),
+                        width="stretch",
+                    )
+                    rendered = True
+                except Exception:
+                    rendered = False
+            png_file = plot_file.with_suffix(".png")
+            if not rendered and png_file.exists():
                 st.image(
-                    svg_content,
-                    caption="SHAP Summary (Beeswarm) Plot: Distribution and direction of process feature impact on Silicon Etch Rate (red = high feature value, blue = low)",
+                    str(png_file),
+                    caption=png_file.stem.replace("bosch_shap_", "").replace("_", " ").title(),
                     width="stretch",
                 )
-                rendered = True
-            except Exception:
-                rendered = False
-        if not rendered and shap_png.exists():
-            st.image(
-                str(shap_png),
-                caption="SHAP Summary (Beeswarm) Plot: Distribution and direction of process feature impact on Silicon Etch Rate (red = high feature value, blue = low)",
-                width="stretch",
-            )
 
 
 def _run_full_benchmark(
@@ -273,31 +278,25 @@ def _run_full_benchmark(
     max_agent_iterations: int,
 ) -> None:
     try:
-        from waferpulse.experiments.bosch_plasma_etch_benchmark import run as run_regression
-        from waferpulse.experiments.bosch_response_then_classify_benchmark import run as run_classification
+        log_placeholder = st.empty()
+        messages: list[str] = []
 
-        existing = _read_json(paths.bosch_output / "summary.json") or {}
-        dataset_summary = existing.get("dataset", {})
-        decision = choose_search_profile_from_summary(
-            {
-                "samples": int(dataset_summary.get("matched_wafers", 0)),
-                "features": "Bosch process-summary features",
-                "manufacturing_lots": int(dataset_summary.get("lots", 0)),
-                "task": "wafer-average and spatial silicon-etch regression",
-            },
-            enabled=use_agentic_controller,
-            api_key=groq_api_key or None,
-            max_iterations=max_agent_iterations,
-        )
+        def ui_log(message: str) -> None:
+            messages.append(message)
+            log_placeholder.code("\n".join(messages[-20:]))
+
         with st.spinner("Running complete Bosch benchmark suite (Regression + Defect Screening)..."):
-            run_regression(
-                paths.bosch_data,
-                paths.bosch_output,
+            BoschPredictionCrew().run(
+                data_dir=paths.bosch_data,
+                output_dir=paths.bosch_output,
+                classification_output_dir=paths.bosch_classification_output,
+                threshold=threshold,
                 refresh_cache=refresh_cache,
-                search_profile=decision.search_profile,
-                agentic_decision=decision.as_dict(),
+                use_agentic_controller=use_agentic_controller,
+                groq_api_key=groq_api_key or None,
+                max_agent_iterations=max_agent_iterations,
+                log_func=ui_log,
             )
-            run_classification(paths.bosch_data, paths.bosch_classification_output, threshold)
         st.success("Bosch benchmark suite rebuilt successfully.")
     except FileNotFoundError:
         st.info(

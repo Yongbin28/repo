@@ -36,6 +36,17 @@ class AgenticSearchDecision:
         return asdict(self)
 
 
+def equipment_dataset_summary(dataset: Any) -> Dict[str, Any]:
+    """Summarize prepared equipment data without sending individual records."""
+    return {
+        "samples": int(len(dataset.features)),
+        "features": int(dataset.features.shape[1]),
+        "manufacturing_lots": int(dataset.groups.nunique()),
+        "bad_wafers": int(dataset.bad_label.sum()),
+        "good_wafers": int((dataset.bad_label == 0).sum()),
+    }
+
+
 def choose_search_profile(
     dataset: Any,
     *,
@@ -48,15 +59,8 @@ def choose_search_profile(
 ) -> AgenticSearchDecision:
     """Ask a bounded Groq agent for a profile; fall back on any failure."""
 
-    summary = {
-        "samples": int(len(dataset.features)),
-        "features": int(dataset.features.shape[1]),
-        "manufacturing_lots": int(dataset.groups.nunique()),
-        "bad_wafers": int(dataset.bad_label.sum()),
-        "good_wafers": int((dataset.bad_label == 0).sum()),
-    }
     return choose_search_profile_from_summary(
-        summary,
+        equipment_dataset_summary(dataset),
         enabled=enabled,
         api_key=api_key,
         model=model,

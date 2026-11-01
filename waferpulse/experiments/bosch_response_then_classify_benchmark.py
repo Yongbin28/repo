@@ -16,10 +16,12 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from typing import Any, Dict, Iterable
+from typing import Any, Dict, Iterable, Mapping
 
 import numpy as np
 import pandas as pd
+
+from waferpulse.core.bosch_contracts import BoschDataset
 
 from waferpulse.experiments.bosch_plasma_etch_benchmark import (
     _group_oof_predictions,
@@ -36,7 +38,11 @@ DEFAULT_RESEARCH_THRESHOLD = 44.0
 
 
 def build_wafer_average_table(data_root: Path) -> tuple[pd.DataFrame, list[str]]:
-    dataset = load_dataset(data_root)
+    return wafer_average_table(load_dataset(data_root))
+
+
+def wafer_average_table(dataset: BoschDataset) -> tuple[pd.DataFrame, list[str]]:
+    """Use the prepared data directly instead of reloading the source files."""
     wafer_target = (
         dataset.measurements.groupby(
             ["experiment_key", "lot_number"], as_index=False
@@ -57,6 +63,7 @@ def benchmark(
     table: pd.DataFrame,
     process_columns: list[str],
     threshold: float = DEFAULT_RESEARCH_THRESHOLD,
+    search_profile: str = "balanced",
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     features = table[process_columns]
     response = table["average_si_etch"].to_numpy(dtype=float)
@@ -67,7 +74,7 @@ def benchmark(
 
     candidates = {
         name: estimator
-        for name, estimator in model_candidates(features.shape[1]).items()
+        for name, estimator in model_candidates(features.shape[1], search_profile).items()
         if name != "dummy_mean"
     }
     for number, (model_name, estimator) in enumerate(candidates.items(), start=1):
@@ -115,13 +122,30 @@ def run(
     output: Path,
     threshold: float = DEFAULT_RESEARCH_THRESHOLD,
 ) -> pd.DataFrame:
-    table, process_columns = build_wafer_average_table(data_root)
-    metrics, predictions = benchmark(table, process_columns, threshold)
+    return train_bosch_screening(load_dataset(data_root), output, threshold)
+
+
+def train_bosch_screening(
+    dataset: BoschDataset,
+    output: Path,
+    threshold: float = DEFAULT_RESEARCH_THRESHOLD,
+    search_profile: str = "balanced",
+    agentic_decision: Mapping[str, Any] | None = None,
+) -> pd.DataFrame:
+    """Evaluate screening on the same prepared data and profile as regression."""
+    table, process_columns = wafer_average_table(dataset)
+    metrics, predictions = benchmark(table, process_columns, threshold, search_profile)
     output.mkdir(parents=True, exist_ok=True)
     metrics.to_csv(output / "metrics.csv", index=False)
     predictions.to_csv(output / "oof_response_then_class.csv", index=False)
     actual_high_etch = response_to_bad(table["average_si_etch"], threshold)
     summary = {
+        "regression_search_profile": search_profile,
+        "agentic_controller": dict(agentic_decision or {
+            "enabled": False,
+            "used_agent": False,
+            "status": "not_requested",
+        }),
         "flow": (
             "upstream BOSCH equipment sensors -> predicted wafer-average silicon "
             "etch -> research high-etch category"

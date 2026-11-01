@@ -944,7 +944,22 @@ def train_equipment_models(
     )
 
     artifact_paths = {key: str(path.resolve()) for key, path in paths.items()}
-    _generate_shap_beeswarm(classification_model, X, bundle["feature_columns"], output_dir)
+    _generate_shap_beeswarm(
+        regression_model,
+        X,
+        bundle["feature_columns"],
+        output_dir,
+        task="regression",
+        champion=regression_name,
+    )
+    _generate_shap_beeswarm(
+        classification_model,
+        X,
+        bundle["feature_columns"],
+        output_dir,
+        task="classification",
+        champion=classification_name,
+    )
     _log(log_func, f"Saved real-data model evidence to {output_dir.resolve()}")
     return EquipmentModelResult(
         metrics=metrics,
@@ -959,28 +974,25 @@ def train_equipment_models(
 
 
 def _generate_shap_beeswarm(
-    classification_model: Any,
+    fitted_model: Any,
     X: pd.DataFrame,
     feature_columns: Sequence[str],
     output_dir: Path,
+    *,
+    task: str,
+    champion: str,
 ) -> None:
     try:
         import shap
         import matplotlib.pyplot as plt
 
-        clf = classification_model
-        transform_steps = [
-            ("imputer", clf.named_steps["imputer"]),
-            ("variance", clf.named_steps["variance"]),
-            ("selector", clf.named_steps["selector"]),
-        ]
-        X_curr = X.copy()
-        for _, step in transform_steps:
-            X_curr = step.transform(X_curr)
-
-        mask = clf.named_steps["selector"].get_support()
-        var_mask = clf.named_steps["variance"].get_support()
-        raw_cols = np.array(feature_columns)[var_mask][mask]
+        clf = fitted_model
+        X_curr = clf[:-1].transform(X)
+        raw_cols = np.asarray(feature_columns)
+        if "variance" in clf.named_steps:
+            raw_cols = raw_cols[clf.named_steps["variance"].get_support()]
+        if "selector" in clf.named_steps:
+            raw_cols = raw_cols[clf.named_steps["selector"].get_support()]
 
         def clean_name(name: str) -> str:
             parts = name.split("__")
@@ -993,12 +1005,27 @@ def _generate_shap_beeswarm(
 
         cleaned_cols = [clean_name(c) for c in raw_cols]
         model = clf.named_steps["model"]
-        explainer = shap.TreeExplainer(model)
-        shap_vals = explainer.shap_values(X_curr)
+        try:
+            explainer = shap.TreeExplainer(model)
+            shap_vals = explainer.shap_values(X_curr)
+        except Exception:
+            sample_count = min(100, len(X))
+            prediction_function = (
+                (lambda rows: clf.predict_proba(rows)[:, 1])
+                if task == "classification" and hasattr(clf, "predict_proba")
+                else clf.predict
+            )
+            explainer = shap.Explainer(
+                prediction_function, X.iloc[: min(40, len(X))]
+            )
+            explanation = explainer(X.iloc[:sample_count])
+            shap_vals = explanation.values
+            X_curr = X.iloc[:sample_count]
+            cleaned_cols = [clean_name(str(name)) for name in feature_columns]
 
-        if isinstance(shap_vals, list) and len(shap_vals) == 2:
+        if task == "classification" and isinstance(shap_vals, list) and len(shap_vals) == 2:
             vals = shap_vals[1]
-        elif isinstance(shap_vals, np.ndarray) and shap_vals.ndim == 3:
+        elif task == "classification" and isinstance(shap_vals, np.ndarray) and shap_vals.ndim == 3:
             vals = shap_vals[:, :, 1]
         else:
             vals = shap_vals
@@ -1021,10 +1048,15 @@ def _generate_shap_beeswarm(
         ax.tick_params(axis="y", labelsize=10, pad=8)
         ax.tick_params(axis="x", labelsize=9.5)
         ax.set_xlabel("SHAP value (impact on model output)", fontsize=10.5, labelpad=8)
-        plt.title("SHAP Beeswarm Summary Plot — Top 10 Feature Drivers", fontsize=12, fontweight="bold", pad=15)
+        plt.title(
+            f"SHAP Beeswarm — {task.title()} champion: {champion}",
+            fontsize=12,
+            fontweight="bold",
+            pad=15,
+        )
         plt.subplots_adjust(left=0.18, right=0.92, top=0.92, bottom=0.12)
-        fig.savefig(output_dir / "shap_beeswarm_summary.png", dpi=300, bbox_inches="tight")
-        fig.savefig(output_dir / "shap_beeswarm_summary.svg", format="svg", bbox_inches="tight")
+        fig.savefig(output_dir / f"shap_beeswarm_{task}.png", dpi=300, bbox_inches="tight")
+        fig.savefig(output_dir / f"shap_beeswarm_{task}.svg", format="svg", bbox_inches="tight")
         plt.close(fig)
     except Exception:
         pass

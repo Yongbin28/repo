@@ -109,3 +109,7 @@ ddr5_limits.csv
 
 # Keep the application mapping workbook even though other workbooks are local
 !TesterFamilyMap.xlsx
+
+# Local version preservation and independent development copies
+/backups/
+/versions/

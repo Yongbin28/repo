@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 
 from waferpulse.tools.equipment_pipeline import (
     DEFAULT_RANDOM_STATE,
@@ -15,14 +15,21 @@ from waferpulse.tools.equipment_pipeline import (
 from waferpulse.agents.groq_model_selection_agent import (
     DEFAULT_GROQ_MODEL,
     DEFAULT_MAX_AGENT_ITERATIONS,
-    choose_search_profile,
+    equipment_dataset_summary,
 )
+from waferpulse.agents.prediction_model_agent import PredictionModelAgent
 
 
-class EquipmentModelAgent:
+class EquipmentModelAgent(PredictionModelAgent[EquipmentDataset, EquipmentModelResult]):
     """Owns honest lot-grouped validation and persisted model evidence."""
 
     name = "Equipment Prediction & Evidence Agent"
+
+    def summarize(self, dataset: EquipmentDataset) -> dict[str, Any]:
+        return equipment_dataset_summary(dataset)
+
+    def train(self, dataset: EquipmentDataset, **kwargs: Any) -> EquipmentModelResult:
+        return train_equipment_models(dataset=dataset, **kwargs)
 
     def run(
         self,
@@ -38,22 +45,16 @@ class EquipmentModelAgent:
         max_agent_iterations: int = DEFAULT_MAX_AGENT_ITERATIONS,
         log_func: Optional[Callable[[str], None]] = None,
     ) -> EquipmentModelResult:
-        decision = choose_search_profile(
-            dataset,
-            enabled=use_agentic_controller,
-            api_key=groq_api_key,
-            model=groq_model,
-            max_iterations=max_agent_iterations,
-            log_func=log_func,
-        )
-        return train_equipment_models(
+        return super().run(
             dataset=dataset,
             output_dir=Path(output_dir),
             n_splits=n_splits,
             selected_features=selected_features,
             n_estimators=n_estimators,
             random_state=random_state,
-            search_profile=decision.search_profile,
-            agentic_decision=decision.as_dict(),
+            use_agentic_controller=use_agentic_controller,
+            groq_api_key=groq_api_key,
+            groq_model=groq_model,
+            max_agent_iterations=max_agent_iterations,
             log_func=log_func,
         )

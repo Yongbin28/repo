@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 from typing import Any, Optional, Tuple
 
 import numpy as np
@@ -87,11 +88,75 @@ def benchmark_local_regression(
             )
         )
     metrics = pd.DataFrame(rows).sort_values("r2", ascending=False).reset_index(drop=True)
+    champion_name = str(metrics.iloc[0]["model"])
+    champion_model = clone(candidates[champion_name]).fit(numeric, target_values)
+    shap_svg = _local_champion_beeswarm(
+        champion_model, numeric, champion_name, target_column
+    )
     metadata = {
         "rows": int(len(target_values)),
         "features": int(numeric.shape[1]),
         "validation": validation,
         "search_profile": search_profile,
-        "champion": str(metrics.iloc[0]["model"]),
+        "champion": champion_name,
+        "shap_svg": shap_svg,
     }
     return metrics, pd.concat(ledgers, ignore_index=True), metadata
+
+
+def _local_champion_beeswarm(
+    fitted_model: Any,
+    features: pd.DataFrame,
+    champion_name: str,
+    target_column: str,
+) -> Optional[str]:
+    """Return an in-memory beeswarm for the validation-selected local champion."""
+    try:
+        import matplotlib.pyplot as plt
+        import shap
+
+        sample_count = min(100, len(features))
+        sample = features.iloc[:sample_count]
+        transformed = fitted_model[:-1].transform(sample)
+        selector = fitted_model.named_steps.get("selector")
+        names = (
+            np.asarray(features.columns)[selector.get_support()]
+            if selector is not None
+            else np.asarray(features.columns)
+        )
+        estimator = fitted_model.named_steps["model"]
+        try:
+            values = shap.TreeExplainer(estimator).shap_values(transformed)
+            plot_data = transformed
+        except Exception:
+            background = features.iloc[: min(30, len(features))]
+            explanation = shap.Explainer(fitted_model.predict, background)(sample)
+            values = explanation.values
+            plot_data = sample
+            names = np.asarray(features.columns)
+
+        cleaned_names = [
+            str(name).replace("signal__", "").replace("__", " · ")
+            for name in names
+        ]
+        figure = plt.figure(figsize=(12, 6), dpi=180)
+        shap.summary_plot(
+            values,
+            plot_data,
+            feature_names=cleaned_names,
+            max_display=10,
+            plot_size=None,
+            show=False,
+            color_bar=True,
+        )
+        plt.title(
+            f"SHAP Beeswarm — {target_column}; champion: {champion_name}",
+            fontsize=12,
+            fontweight="bold",
+        )
+        buffer = io.StringIO()
+        figure.savefig(buffer, format="svg", bbox_inches="tight")
+        plt.close(figure)
+        return buffer.getvalue()
+    except Exception:
+        return None
