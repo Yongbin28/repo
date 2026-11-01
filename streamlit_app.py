@@ -4373,21 +4373,28 @@ elif app_mode == "Wafer Analytics & Prediction":
             st.components.v1.html(cert_html, height=780, scrolling=True)
 
         st.markdown("---")
-        st.subheader("4) 🤖 AI Fab Engineering Shift Handover Note")
-        st.caption("Powered by Groq Cloud (Ultra-Fast Fab Intelligence) with automated deterministic rule fallback.")
+        st.subheader("4) Fab Engineering Shift Handover Note")
+        st.caption("The report is generated locally unless you explicitly approve sending its inputs to Groq.")
 
-        from waferpulse.tools.ai_report import DEFAULT_GROQ_API_KEY
-        with st.expander("⚙️ Groq API Configuration (Pre-configured & Saved)", expanded=False):
+        with st.expander("⚙️ Optional Groq API Configuration", expanded=False):
             groq_key_input = st.text_input(
                 "Groq Cloud API Key",
-                value=DEFAULT_GROQ_API_KEY,
+                value="",
                 type="password",
-                help="Permanently saved and ready for instant execution. You can also override with your custom key if desired.",
+                help="Optional. Used only after you approve sending the report inputs to Groq.",
                 key="groq_api_key_input"
             )
+        external_report_approved = st.checkbox(
+            "I approve sending the displayed wafer/product identifiers, predicted and historical yield, grade, pattern label, counts, and outlier labels to Groq for report generation.",
+            value=False,
+            key="fab_handover_external_approved",
+        )
+        st.caption(
+            "Without approval, the report uses the local template. Pattern labels and outliers are items for review, not confirmed diagnoses."
+        )
 
-        if st.button("⚡ Generate AI Fab Shift Report", type="secondary", key="btn_generate_ai_shift"):
-            with st.spinner("Generating AI Fab Engineering Shift Report..."):
+        if st.button("⚡ Generate Shift Handover Note", type="secondary", key="btn_generate_ai_shift"):
+            with st.spinner("Generating shift handover note..."):
                 from waferpulse.tools.ai_report import generate_shift_handover_note
                 
                 # Determine spatial defect pattern text
@@ -4415,6 +4422,7 @@ elif app_mode == "Wafer Analytics & Prediction":
                     total_dies=total_wafer_dies,
                     top_outliers=outlier_names,
                     api_key=groq_key_input.strip() if groq_key_input else None,
+                    use_ai=external_report_approved,
                 )
                 st.session_state["fab_shift_note"] = ai_result
 

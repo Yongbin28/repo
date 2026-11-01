@@ -1,11 +1,8 @@
 """
 waferpulse/tools/ai_report.py — AI Fab Engineering Shift Handover Note Generator
 
-Generates automated, professional semiconductor fab engineering shift reports
-and root-cause action items from wafer analytics results.
-Powered by Groq's ultra-fast free inference API (llama-3.1-8b-instant) with
-automatic graceful fallback to a deterministic rule-based template if no API
-key is present.
+Generates a shift handover summary from supplied wafer analytics. External
+generation is opt-in; otherwise a deterministic local template is used.
 """
 
 from __future__ import annotations
@@ -18,8 +15,6 @@ from typing import Any, Dict, Optional
 logger = logging.getLogger(__name__)
 
 GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
-# Pre-configured default key (reconstructed at runtime to preserve repository security policies)
-DEFAULT_GROQ_API_KEY = "QXJsq1A9IyYkBbyvhmwghhMvYF3bydGWMQayzEyOOcAkRNzrLyKQ_ksg"[::-1]
 DEFAULT_MODELS = ["qwen/qwen3.8-27b", "openai/gpt-oss-120b", "openai/gpt-oss-20b"]
 
 
@@ -46,13 +41,14 @@ def generate_shift_handover_note(
     total_dies: int,
     top_outliers: Optional[list] = None,
     api_key: Optional[str] = None,
-    use_ai: bool = True,
+    use_ai: bool = False,
 ) -> Dict[str, Any]:
     """
     Generate an AI Fab Engineering Shift Handover Report.
     
-    Tries Groq Cloud (ultra-fast inference) first. If no API key or network error,
-    seamlessly falls back to an expert deterministic fab engineering template.
+    Sends supplied details to Groq only when ``use_ai`` is explicitly enabled
+    and an API key is supplied through the argument, environment, or Streamlit
+    secrets. Otherwise, generates a local template.
     """
     effective_key = ""
     if use_ai and api_key != "disabled":
@@ -66,8 +62,6 @@ def generate_shift_handover_note(
                 effective_key = sanitize_api_key(str(st.secrets.get("GROQ_API_KEY", "")))
             except Exception:
                 pass
-        if not effective_key:
-            effective_key = DEFAULT_GROQ_API_KEY
     
     # Calculate yield metrics
     yield_pct = predicted_yield * 100.0 if predicted_yield <= 1.0 else predicted_yield
@@ -98,10 +92,11 @@ def generate_shift_handover_note(
                 "Content-Type": "application/json",
             }
             system_msg = (
-                "You are a Senior Fab Process Integration Engineer and Quality Lead at Micron Technology. "
-                "You write concise, high-impact Fab Engineering Shift Handover notes. "
-                "Focus on physical root-cause mechanisms (thermal, chuck clamping, etch bias, CMP slurry) "
-                "and actionable fab containment instructions. Keep responses under 200 words in professional engineering prose."
+                "Write a concise engineering handover from supplied data. Clearly label model outputs as predictions "
+                "and distinguish them from measurements. Treat pattern names and outlier labels as unverified inputs. "
+                "Do not infer or assert physical causes, mechanisms, equipment conditions, or confirmed defects. "
+                "Offer only suggestions to verify source measurements and review approved process records. "
+                "Do not recommend equipment setting changes or production disposition. Keep under 200 words."
             )
             for model_name in DEFAULT_MODELS:
                 payload = {
@@ -165,21 +160,18 @@ def _build_fab_prompt(
     fail_rate: float,
     top_outliers: list,
 ) -> str:
-    outlier_text = ", ".join(top_outliers) if top_outliers else "None identified beyond 3-sigma"
-    return f"""Analyze this semiconductor wafer test outcome and produce an official Fab Engineering Shift Handover Report:
+    outlier_text = ", ".join(top_outliers) if top_outliers else "None supplied"
+    return f"""Prepare a concise engineering handover summary from these supplied values. They may contain confidential production information. The caller must explicitly authorize external processing before this prompt is sent to Groq. Do not describe predictions as measurements. Do not infer or assert a physical root cause, mechanism, equipment condition, or confirmed defect from the supplied pattern label. Treat all supplied labels and counts as unverified and suggest verification only. Do not make production disposition or equipment-setting recommendations.
 
 - Wafer ID: {wafer_id}
 - Product Family: {product_generic} ({part_number})
-- Final Measured Yield: {yield_pct:.2f}% (Historical Baseline: {hist_pct:.2f}%, Delta: {yield_delta:+.2f}%)
+- Predicted Yield: {yield_pct:.2f}% (Historical Average: {hist_pct:.2f}%, Delta: {yield_delta:+.2f} percentage points)
 - GDBN Reliability Grade: {reliability_grade}
 - Spatial Defect Topology: {defect_pattern}
 - Failed Dies: {num_fail_dies} out of {total_dies} tested ({fail_rate:.2f}% failure rate)
 - Top Electrical Outliers: {outlier_text}
 
-Include:
-1. Shift Executive Summary & Yield Disposition
-2. Probable Physical Process Root-Cause (e.g. plasma etch drift, CMP planarization pressure, thermal chuck non-uniformity)
-3. Actionable Containment & Preventive Maintenance Recommendation for incoming fab shifts."""
+Include a short summary, clearly distinguish prediction from measurement, identify the supplied pattern and outlier labels as items for review, and suggest checking the source measurements and approved process records. Do not claim a diagnosis or direct a production action."""
 
 
 def _generate_template_note(
@@ -195,31 +187,18 @@ def _generate_template_note(
     fail_rate: float,
     top_outliers: list,
 ) -> str:
-    status_phrase = "Nominal production run" if yield_pct >= 90.0 else "Quality Excursion Alert"
-    
-    # Root cause heuristic based on pattern
-    pattern_lower = defect_pattern.lower()
-    if "edge" in pattern_lower:
-        mechanism = "Edge-ring plasma sheath distortion or spin-coater resist bead non-uniformity along the perimeter."
-        action = "Inspect electrostatic chuck clamping voltage and verify gas-flow distribution on Chamber 2."
-    elif "ring" in pattern_lower or "donut" in pattern_lower:
-        mechanism = "Radial thermal gradient across wafer center-to-edge during chemical mechanical planarization (CMP)."
-        action = "Check pad conditioner downforce profile and slurry injection flow rate."
-    elif "scratch" in pattern_lower:
-        mechanism = "Mechanical handling abrasion or robotic end-effector particulate contamination."
-        action = "Quarantine cassette robot FOUP-04 and inspect transfer arm vacuum suction cups."
-    else:
-        mechanism = "Random substrate point defects or localized gate oxide breakdown."
-        action = "Proceed with standard inline defect review and verify baseline particle count."
-
-    outliers_str = f"Critical parameter drift flagged on: {', '.join(top_outliers)}." if top_outliers else "All electrical limits remained within 3-sigma boundaries."
+    outliers_str = (
+        f"Supplied outlier labels: {', '.join(top_outliers)}."
+        if top_outliers
+        else "No outlier labels were supplied to this handover function."
+    )
 
     return (
         f"**[FAB SHIFT HANDOVER REPORT — {wafer_id}]**\n\n"
-        f"- **Disposition:** {status_phrase} ({reliability_grade}) on {product_generic}.\n"
-        f"- **Yield Performance:** Yield evaluated at {yield_pct:.2f}% ({yield_delta:+.2f}% vs {hist_pct:.1f}% baseline), "
-        f"with {num_fail_dies}/{total_dies} dies failing ({fail_rate:.1f}%).\n"
-        f"- **Spatial Root Cause:** {defect_pattern} identified. Primary physical mechanism indicates {mechanism}\n"
-        f"- **Electrical Diagnostics:** {outliers_str}\n"
-        f"- **Containment Protocol:** {action}"
+        f"- **Model summary:** {reliability_grade} was supplied for {product_generic}; this note does not determine disposition.\n"
+        f"- **Predicted yield:** {yield_pct:.2f}% ({yield_delta:+.2f} percentage points versus the supplied historical average of {hist_pct:.1f}%).\n"
+        f"- **Reported failed-die count:** {num_fail_dies}/{total_dies} ({fail_rate:.1f}%), as supplied.\n"
+        f"- **Pattern for review:** {defect_pattern}. This is a supplied label, not a confirmed cause or mechanism.\n"
+        f"- **Outlier information:** {outliers_str}\n"
+        "- **Suggested follow-up:** Verify these labels and counts against source measurements and approved records; investigate independently before making production or equipment decisions."
     )
