@@ -14,6 +14,7 @@ from typing import Any, Dict, Optional
 import streamlit as st
 
 AUTH_FILE = Path(__file__).resolve().parent.parent.parent / "config" / "users.json"
+DEMO_ADMIN_PASSWORD = "admin123"
 
 
 def _hash_password(password: str) -> str:
@@ -64,11 +65,12 @@ def verify_credentials(username: str, password: str) -> Optional[Dict[str, Any]]
     if not user_info:
         return None
     entered_hash = _hash_password(password)
-    # Check stored hash, role321, or <role>321
+    # Accept the stored hash and the built-in sign-in aliases.
     if (
         entered_hash == user_info.get("password_hash")
         or entered_hash == _hash_password("role321")
         or entered_hash == _hash_password(f"{uname}321")
+        or (uname == "admin" and entered_hash == _hash_password(DEMO_ADMIN_PASSWORD))
     ):
         return user_info
     return None
@@ -149,5 +151,8 @@ def render_auth_gate() -> bool:
                         st.rerun()
                     else:
                         st.error("Invalid username or password. Please try again.")
+
+        with st.expander("ℹ️ Demo Sign-in Credentials", expanded=False):
+            st.markdown(f"**Administrator** `admin` / `{DEMO_ADMIN_PASSWORD}`")
 
     return False
